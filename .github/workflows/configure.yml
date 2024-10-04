@@ -30,7 +30,7 @@ jobs:
           dot: true
 
   environment:
-    name: Configure
+    name: Environment
     runs-on: ubuntu-latest
     outputs:
       composer-cache: ${{ steps.environment.outputs.composer-cache }}
