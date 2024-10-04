@@ -1,0 +1,50 @@
+name: Report
+
+on:
+  workflow_call:
+    inputs:
+      has-coveralls:
+        type: boolean
+        default: true
+      has-codeclimate:
+        type: boolean
+        default: true
+
+jobs:
+  coveralls:
+    name: Coveralls
+    if: inputs.has-coveralls == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Coveralls Report
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.github_token }}
+          parallel-finished: true
+
+  codeclimate:
+    name: CodeClimate
+    if: inputs.has-codeclimate == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-reports-*
+          merge-multiple: true
+
+      - name: CodeClimate Report
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          CC_TEST_REPORTER_URL: ${{ vars.CC_TEST_REPORTER_URL }}
+        run: |
+          curl -LSs $CC_TEST_REPORTER_URL > ./cc-test-reporter && chmod +x ./cc-test-reporter
+          ./cc-test-reporter sum-coverage -o - codeclimate.*.json | ./cc-test-reporter upload-coverage --input -
