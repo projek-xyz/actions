@@ -40,7 +40,7 @@ jobs:
 
       - name: CodeClimate Report
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          # CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
           CC_TEST_REPORTER_URL: ${{ vars.CC_TEST_REPORTER_URL }}
         run: |
           curl -LSs $CC_TEST_REPORTER_URL > ./cc-test-reporter && chmod +x ./cc-test-reporter
