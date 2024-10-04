@@ -10,14 +10,14 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write
+
 jobs:
   coveralls:
     name: Coveralls
     if: inputs.has-coveralls == true
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
 
     steps:
       - name: Coveralls Report
@@ -30,9 +30,6 @@ jobs:
     name: CodeClimate
     if: inputs.has-codeclimate == true
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
 
     steps:
       - name: Download Reports
