@@ -35,7 +35,7 @@ jobs:
     outputs:
       composer-cache: ${{ steps.environment.outputs.composer-cache }}
       should-reports: ${{ steps.environment.outputs.should-reports }}
-      target-branch: ${{ steps.environments.outputs.target-branch }}
+      target-branch: ${{ steps.environment.outputs.target-branch }}
 
     steps:
       - name: Checkout
