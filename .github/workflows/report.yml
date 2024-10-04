@@ -5,10 +5,10 @@ on:
     inputs:
       has-coveralls:
         type: boolean
-        default: true
+        default: false
       has-codeclimate:
         type: boolean
-        default: true
+        default: false
 
 jobs:
   coveralls:
