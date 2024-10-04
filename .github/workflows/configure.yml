@@ -7,6 +7,8 @@ on:
         value: ${{ jobs.environment.outputs.composer-cache }}
       should-reports:
         value: ${{ jobs.environment.outputs.should-reports }}
+      target-branch:
+        value: ${{ jobs.environment.outputs.target-branch }}
 
 jobs:
   labels:
@@ -33,6 +35,7 @@ jobs:
     outputs:
       composer-cache: ${{ steps.environment.outputs.composer-cache }}
       should-reports: ${{ steps.environment.outputs.should-reports }}
+      target-branch: ${{ steps.environments.outputs.target-branch }}
 
     steps:
       - name: Checkout
@@ -50,5 +53,6 @@ jobs:
           CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
         run: |
           git config user.name "Creasi.HQ" && git config user.email "developers@creasi.co"
+          echo "target-branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
           echo "composer-cache=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
           echo "should-reports=$([[ -n \"$CC_TEST_REPORTER_ID\" ]] && echo '1')" >> $GITHUB_OUTPUT
