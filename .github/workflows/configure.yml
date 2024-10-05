@@ -2,6 +2,11 @@ name: Configure
 
 on:
   workflow_call:
+    secrets:
+      CC_TEST_REPORTER_ID:
+        required: false
+      COVERALLS_REPO_TOKEN:
+        required: false
     outputs:
       composer-cache:
         value: ${{ jobs.environment.outputs.composer-cache }}
@@ -34,8 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       composer-cache: ${{ steps.environment.outputs.composer-cache }}
-      should-reports: ${{ steps.environment.outputs.should-reports }}
       target-branch: ${{ steps.environment.outputs.target-branch }}
+      should-reports: ${{ steps.environment.outputs.should-reports }}
+      has-codeclimate: ${{ steps.codeclimate.outputs.should-reports == '1' }}
+      has-coveralls: ${{ steps.coveralls.outputs.should-reports == '1' }}
 
     steps:
       - name: Checkout
@@ -47,12 +54,27 @@ jobs:
           tools: composer:v2
           coverage: none
 
+      - name: Should reports to CodeClimate
+        id: codeclimate
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+        run: |
+          if ! [ -z "${CC_TEST_REPORTER_ID}" ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
+
+      - name: Should reports to Coveralls
+        id: coveralls
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: |
+          if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
+
       - name: Environment
         id: environment
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          CODECLIMATE: ${{ steps.codeclimate.outputs.should-reports }}
+          COVERALLS: ${{ steps.coveralls.outputs.should-reports }}
         run: |
           git config user.name "Creasi.HQ" && git config user.email "developers@creasi.co"
           echo "target-branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
           echo "composer-cache=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-          if ! [ -z "${CC_TEST_REPORTER_ID}" ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
+          if [ "${CODECLIMATE}" -eq '1' ] || [ "${COVERALLS}" -eq '1' ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi

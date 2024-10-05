@@ -20,4 +20,4 @@ jobs:
     - name: Release Changelog
       run: npx changelogithub
       env:
-        GITHUB_TOKEN: ${{ secrets.github_token }}
+        GITHUB_TOKEN: ${{ github.token }}
