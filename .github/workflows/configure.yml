@@ -10,10 +10,14 @@ on:
     outputs:
       composer-cache:
         value: ${{ jobs.environment.outputs.composer-cache }}
-      should-reports:
-        value: ${{ jobs.environment.outputs.should-reports }}
       target-branch:
         value: ${{ jobs.environment.outputs.target-branch }}
+      should-reports:
+        value: ${{ jobs.environment.outputs.should-reports }}
+      has-codeclimate:
+        value: ${{ jobs.environment.outputs.has-codeclimate }}
+      has-coveralls:
+        value: ${{ jobs.environment.outputs.has-coveralls }}
 
 jobs:
   labels:
