@@ -1,0 +1,20 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ["**.md"]
+
+enhancement:
+  - changed-files:
+      - any-glob-to-any-file: "**"
+
+experimental:
+  - head-branch: ["^test", "test"]
+
+features:
+  - head-branch: ["^feat", "feat"]
+
+fixes:
+  - head-branch: ["^fix", "fix"]
+
+integration:
+  - changed-files:
+      - any-glob-to-any-file: [".github/**.yml"]
