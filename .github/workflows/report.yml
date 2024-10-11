@@ -6,6 +6,9 @@ on:
       CC_TEST_REPORTER_ID:
         required: false
     inputs:
+      reports-artifact-pattern:
+        type: string
+        default: test-reports-*
       has-coveralls:
         type: boolean
         default: false
@@ -38,7 +41,7 @@ jobs:
       - name: Download Reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-reports-*
+          pattern: ${{ inputs.reports-artifact-pattern }}
           merge-multiple: true
 
       - name: CodeClimate Report
