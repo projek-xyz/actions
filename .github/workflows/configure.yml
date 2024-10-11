@@ -19,6 +19,8 @@ on:
     outputs:
       composer-cache:
         value: ${{ jobs.environments.outputs.composer-cache }}
+      composer-cache-key:
+        value: ${{ jobs.environments.outputs.composer-cache-key }}
       target-branch:
         value: ${{ jobs.environments.outputs.target-branch }}
       should-reports:
