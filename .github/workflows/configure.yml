@@ -1,7 +1,16 @@
 name: Configure
 
 on:
+  pull_request:
+    branches: [main]
   workflow_call:
+    inputs:
+      php-version:
+        required: false
+        type: string
+      laravel-version:
+        required: false
+        type: string
     secrets:
       CC_TEST_REPORTER_ID:
         required: false
@@ -9,15 +18,15 @@ on:
         required: false
     outputs:
       composer-cache:
-        value: ${{ jobs.environment.outputs.composer-cache }}
+        value: ${{ jobs.environments.outputs.composer-cache }}
       target-branch:
-        value: ${{ jobs.environment.outputs.target-branch }}
+        value: ${{ jobs.environments.outputs.target-branch }}
       should-reports:
-        value: ${{ jobs.environment.outputs.should-reports }}
+        value: ${{ jobs.environments.outputs.should-reports }}
       has-codeclimate:
-        value: ${{ jobs.environment.outputs.has-codeclimate }}
+        value: ${{ jobs.environments.outputs.has-codeclimate }}
       has-coveralls:
-        value: ${{ jobs.environment.outputs.has-coveralls }}
+        value: ${{ jobs.environments.outputs.has-coveralls }}
 
 jobs:
   labels:
@@ -38,47 +47,53 @@ jobs:
         with:
           dot: true
 
-  environment:
-    name: Environment
+  environments:
+    name: Environments
+    if: github.event == 'workflow_call'
     runs-on: ubuntu-latest
     outputs:
-      composer-cache: ${{ steps.environment.outputs.composer-cache }}
+      composer-cache: ${{ steps.composer.outputs.composer-cache }}
+      composer-cache-key: ${{ steps.composer.outputs.composer-cache-key }}
       target-branch: ${{ steps.environment.outputs.target-branch }}
       should-reports: ${{ steps.environment.outputs.should-reports }}
-      has-codeclimate: ${{ steps.codeclimate.outputs.should-reports == '1' }}
-      has-coveralls: ${{ steps.coveralls.outputs.should-reports == '1' }}
+      has-codeclimate: ${{ steps.reports.outputs.has-codeclimate }}
+      has-coveralls: ${{ steps.reports.outputs.has-coveralls }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Reports
+        id: reports
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: |
+          if ! [ -z "${CC_TEST_REPORTER_ID}" ]; then echo "has-codeclimate=1" >> $GITHUB_OUTPUT; fi
+          if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> $GITHUB_OUTPUT; fi
+
+      - name: Environment
+        id: environment
+        env:
+          PHP_VERSION: ${{ inputs.php-version }}
+          CODECLIMATE: ${{ steps.reports.outputs.has-codeclimate }}
+          COVERALLS: ${{ steps.reports.outputs.has-coveralls }}
+        run: |
+          echo "target-branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+          if [ "$CODECLIMATE" == '1' ] || [ "$COVERALLS" == '1' ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
+          if ! [ -z "${PHP_VERSION}" ]; then echo "has-php=1" >> $GITHUB_OUTPUT; fi
 
       - name: Setup PHP
+        if: steps.environment.outputs.has-php == '1'
         uses: shivammathur/setup-php@v2
         with:
           tools: composer:v2
           coverage: none
 
-      - name: Should reports to CodeClimate
-        id: codeclimate
+      - name: Composer
+        if: steps.environment.outputs.has-php == '1'
+        id: composer
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          LARAVEL_VERSION: ${{ inputs.laravel-version }}
+          COMPOSER_CACHE_KEY: php-${{ inputs.php-version }}
         run: |
-          if ! [ -z "${CC_TEST_REPORTER_ID}" ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
-
-      - name: Should reports to Coveralls
-        id: coveralls
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        run: |
-          if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
-
-      - name: Environment
-        id: environment
-        env:
-          CODECLIMATE: ${{ steps.codeclimate.outputs.should-reports }}
-          COVERALLS: ${{ steps.coveralls.outputs.should-reports }}
-        run: |
-          git config user.name "Creasi.HQ" && git config user.email "developers@creasi.co"
-          echo "target-branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+          if ! [ -z "${LARAVEL_VERSION}" ]; then COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"; fi
           echo "composer-cache=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-          if [ "$CODECLIMATE" == '1' ] || [ "$COVERALLS" == '1' ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
+          echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> $GITHUB_OUTPUT
