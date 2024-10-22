@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: 'Branch target'
+        default: main
+        type: string
+      composer-cache:
+        required: true
+        type: string
+      composer-cache-key:
+        default: php-${{ inputs.php-version }}
+        type: string
+      sentry-project:
+        required: false
+        type: string
+      php-version:
+        default:  '8.2'
+        type: string
+      target-env:
+        description: 'Build target'
+        default: testing
+        type: string
+      target-url:
+        description: 'URL target'
+        default: http://localhost:8000
+        type: string
+    outputs:
+      target-env:
+        value: ${{ jobs.build.outputs.target-env }}
+      target-url:
+        value: ${{ jobs.build.outputs.target-url }}
+    secrets:
+      ACCESS_TOKEN:
+        required: false
+      SENTRY_AUTH_TOKEN:
+        required: false
+      SENTRY_DSN:
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build for `${{ inputs.target-env }}`
+    outputs:
+      target-env: ${{ inputs.target-env }}
+      target-url: ${{ inputs.target-url }}
+
+    env:
+      APP_ENV: ${{ inputs.target-env }}
+      APP_URL: ${{ inputs.target-url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: true
+
+      - name: Setup node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: lts/*
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          extensions: curl, intl, libxml, mbstring, pcntl, ssh2, zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Prepare Composer Cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.composer-cache }}
+          key: ${{ inputs.composer-cache-key }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ inputs.composer-cache-key }}-composer-
+
+      - name: Install dependencies
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          composer update --prefer-dist --no-interaction --no-progress --ansi
+          cp .github/.env.example .env
+          [[ $APP_ENV != 'testing' ]] && composer dep deploy:info env=${{ env.APP_ENV }} -- --branch $BRANCH
+          composer ziggy:generate
+          php artisan vendor:publish --tag creasi-assets --ansi
+
+      - name: Build frontend
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ORG: ${{ github.repository_owner }}
+          SENTRY_PROJECT: ${{ inputs.sentry-project }}
+        run: |
+          pnpm build --mode ${{ env.APP_ENV }}
+
+      - name: Store assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ env.APP_ENV }}
+          path: |
+            public/build
+            public/vendor

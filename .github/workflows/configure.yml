@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       php-version:
-        required: false
+        default:  '8.2'
         type: string
       laravel-version:
         required: false
