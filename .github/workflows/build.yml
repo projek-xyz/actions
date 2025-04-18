@@ -28,6 +28,8 @@ on:
         default: http://localhost:8000
         type: string
     outputs:
+      app-key:
+        value: ${{ jobs.build.outputs.app-key }}
       target-env:
         value: ${{ jobs.build.outputs.target-env }}
       target-url:
@@ -85,19 +87,23 @@ jobs:
 
       - name: Install dependencies
         id: app
-        env:
-          BRANCH: ${{ inputs.branch }}
         run: |
+          [[ -f .github/.env.example ]] && cp .github/.env.example .env
           composer update --prefer-dist --no-scripts --no-interaction --no-progress --ansi
           echo "generated-key=$(php artisan key:generate --show)" >> $GITHUB_OUTPUT
-          [[ -f .github/.env.example ]] && cp .github/.env.example .env
-          [[ $APP_ENV != 'testing' ]] && composer dep deploy:info env=$APP_ENV -- --branch $BRANCH
 
       - name: Dump Autoload
         env:
-          APP_ENV: ${{ steps.app.outputs.generated-key }}
+          APP_KEY: ${{ steps.app.outputs.generated-key }}
         run: |
           composer dump-autoload
+
+      - name: Deploy Info
+        if: env.APP_ENV != 'testing'
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          composer dep deploy:info env=$APP_ENV -- --branch $BRANCH
 
       - name: Build frontend
         env:
