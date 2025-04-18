@@ -91,6 +91,7 @@ jobs:
           [[ -f .github/.env.example ]] && cp .github/.env.example .env
           composer update --prefer-dist --no-scripts --no-interaction --no-progress --ansi
           echo "generated-key=$(php artisan key:generate --show)" >> $GITHUB_OUTPUT
+          touch database/database.sqlite
 
       - name: Dump Autoload
         env:
