@@ -100,7 +100,7 @@ jobs:
           composer dump-autoload
 
       - name: Deploy Info
-        if: env.APP_ENV != 'testing'
+        if: ${{ env.APP_ENV != 'testing' && env.APP_URL != 'http://localhost:8000' }}
         env:
           BRANCH: ${{ inputs.branch }}
         run: |
