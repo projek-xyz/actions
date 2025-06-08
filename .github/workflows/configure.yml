@@ -17,8 +17,8 @@ on:
       COVERALLS_REPO_TOKEN:
         required: false
     outputs:
-      composer-cache:
-        value: ${{ jobs.environments.outputs.composer-cache }}
+      composer-cache-dir:
+        value: ${{ jobs.environments.outputs.composer-cache-dir }}
       composer-cache-key:
         value: ${{ jobs.environments.outputs.composer-cache-key }}
       target-branch:
@@ -53,7 +53,7 @@ jobs:
     name: Environments
     runs-on: ubuntu-latest
     outputs:
-      composer-cache: ${{ steps.composer.outputs.composer-cache }}
+      composer-cache-dir: ${{ steps.composer.outputs.composer-cache-dir }}
       composer-cache-key: ${{ steps.composer.outputs.composer-cache-key }}
       target-branch: ${{ steps.environment.outputs.target-branch }}
       should-reports: ${{ steps.environment.outputs.should-reports }}
@@ -61,6 +61,9 @@ jobs:
       has-coveralls: ${{ steps.reports.outputs.has-coveralls }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Reports
         id: reports
         env:
@@ -88,13 +91,14 @@ jobs:
           tools: composer:v2
           coverage: none
 
-      - name: Composer
+      - name: Composer Caches
         if: steps.environment.outputs.has-php == '1'
         id: composer
         env:
           LARAVEL_VERSION: ${{ inputs.laravel-version }}
           COMPOSER_CACHE_KEY: php-${{ inputs.php-version }}
         run: |
+          if ! [ -f ./composer.json ]; then ls -lah; echo "::error::\`composer.json\` file not found."; exit 1; fi
           if ! [ -z "${LARAVEL_VERSION}" ]; then COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"; fi
-          echo "composer-cache=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+          echo "composer-cache-dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
           echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> $GITHUB_OUTPUT
