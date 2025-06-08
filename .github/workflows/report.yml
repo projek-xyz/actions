@@ -51,3 +51,8 @@ jobs:
         run: |
           curl -LSs $CC_TEST_REPORTER_URL > ./cc-test-reporter && chmod +x ./cc-test-reporter
           ./cc-test-reporter sum-coverage -o - codeclimate.*.json | ./cc-test-reporter upload-coverage --input -
+
+      - name: Prune artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: ${{ inputs.reports-artifact-pattern }}
