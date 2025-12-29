@@ -11,6 +11,10 @@ on:
         description: Docker build args
         required: false
         type: string
+      docker-file:
+        description: Docker file path
+        required: true
+        type: string
       image-name:
         description: Docker image name
         required: true
@@ -20,7 +24,7 @@ on:
         required: true
         type: string
       repository-name:
-        description: Repository name
+        description: Lowercase repository name
         required: true
         type: string
 
@@ -67,7 +71,7 @@ jobs:
           context: .
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: dockerfiles/${{ inputs.image-name }}.dockerfile
+          file: ${{ inputs.docker-file }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
