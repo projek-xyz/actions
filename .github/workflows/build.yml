@@ -116,7 +116,7 @@ jobs:
           pnpm build --mode ${{ env.APP_ENV }}
 
       - name: Store assets
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build-${{ env.APP_ENV }}
           path: |
