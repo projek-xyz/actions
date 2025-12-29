@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       php-version:
-        default:  '8.2'
+        required: false
         type: string
       laravel-version:
         required: false
@@ -25,6 +25,8 @@ on:
         value: ${{ jobs.environments.outputs.target-branch }}
       should-reports:
         value: ${{ jobs.environments.outputs.should-reports }}
+      repository-name:
+        value: ${{ jobs.environments.outputs.repository-name }}
       has-codeclimate:
         value: ${{ jobs.environments.outputs.has-codeclimate }}
       has-coveralls:
@@ -55,8 +57,10 @@ jobs:
     outputs:
       composer-cache-dir: ${{ steps.composer.outputs.composer-cache-dir }}
       composer-cache-key: ${{ steps.composer.outputs.composer-cache-key }}
-      target-branch: ${{ steps.environment.outputs.target-branch }}
+      docker-image-tag: ${{ steps.environment.outputs.docker-image-tag }}
       should-reports: ${{ steps.environment.outputs.should-reports }}
+      repository-name: ${{ steps.repo.outputs.lower-name }}
+      target-branch: ${{ steps.repo.outputs.branch-name }}
       has-codeclimate: ${{ steps.reports.outputs.has-codeclimate }}
       has-coveralls: ${{ steps.reports.outputs.has-coveralls }}
 
@@ -73,22 +77,45 @@ jobs:
           if ! [ -z "${CC_TEST_REPORTER_ID}" ]; then echo "has-codeclimate=1" >> $GITHUB_OUTPUT; fi
           if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> $GITHUB_OUTPUT; fi
 
+      - name: Repository
+        id: repo
+        run: |
+          # Extract repository name and convert to lowercase
+          echo "lower-name=$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+          # Extract repository branch name
+          echo "branch-name=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+          if [ -f ./package.json ]; then
+            # Extract version number from `package.json` file
+            echo "app-version=$(cat package.json | jq -r '.version')" >> $GITHUB_OUTPUT
+          fi
+
       - name: Environment
         id: environment
         env:
-          PHP_VERSION: ${{ inputs.php-version }}
+          APP_VERSION: ${{ steps.repo.outputs.app-version }}
+          BRANCH_NAME: ${{ steps.repo.outputs.branch-name }}
           CODECLIMATE: ${{ steps.reports.outputs.has-codeclimate }}
           COVERALLS: ${{ steps.reports.outputs.has-coveralls }}
+          PHP_VERSION: ${{ inputs.php-version }}
         run: |
-          echo "target-branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          if [ "$CODECLIMATE" == '1' ] || [ "$COVERALLS" == '1' ]; then echo "should-reports=1" >> $GITHUB_OUTPUT; fi
-          if ! [ -z "${PHP_VERSION}" ]; then echo "has-php=1" >> $GITHUB_OUTPUT; fi
+          # Generate image tag with timestamp and commit
+          echo "docker-image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+
+          if [ "$CODECLIMATE" == '1' ] || [ "$COVERALLS" == '1' ]; then
+            echo "should-reports=1" >> $GITHUB_OUTPUT;
+          fi
+
+          if ! [ -z "${PHP_VERSION}" ]; then
+            echo "has-php=1" >> $GITHUB_OUTPUT;
+          fi
 
       - name: Setup PHP
         if: steps.environment.outputs.has-php == '1'
         uses: shivammathur/setup-php@v2
         with:
-          tools: composer:v2
+          php-version: ${{ inputs.php-version }}
           coverage: none
 
       - name: Composer Caches
@@ -98,7 +125,14 @@ jobs:
           LARAVEL_VERSION: ${{ inputs.laravel-version }}
           COMPOSER_CACHE_KEY: php-${{ inputs.php-version }}
         run: |
-          if ! [ -f ./composer.json ]; then ls -lah; echo "::error::\`composer.json\` file not found."; exit 1; fi
-          if ! [ -z "${LARAVEL_VERSION}" ]; then COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"; fi
+          if ! [ -f ./composer.json ]; then
+            ls -lah; echo "::error::\`composer.json\` file not found."
+            exit 1
+          fi
+
+          if ! [ -z "${LARAVEL_VERSION}" ]; then
+            COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"
+          fi
+
           echo "composer-cache-dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
           echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> $GITHUB_OUTPUT
