@@ -53,6 +53,6 @@ jobs:
           ./cc-test-reporter sum-coverage -o - codeclimate.*.json | ./cc-test-reporter upload-coverage --input -
 
       - name: Prune artifacts
-        uses: geekyeggo/delete-artifact@v5
+        uses: geekyeggo/delete-artifact@v6
         with:
           name: ${{ inputs.reports-artifact-pattern }}
