@@ -42,7 +42,8 @@ on:
       should-reports:
         value: ${{ jobs.environments.outputs.should-reports }}
       has-codeclimate:
-        value: ${{ jobs.environments.outputs.has-codeclimate }}
+        value: '0'
+        description: 'Deprecated'
       has-coveralls:
         value: ${{ jobs.environments.outputs.has-coveralls }}
 
@@ -90,7 +91,6 @@ jobs:
       target-branch: ${{ steps.repo.outputs.branch-name }}
       # Test Reports
       should-reports: ${{ steps.environment.outputs.should-reports }}
-      has-codeclimate: ${{ steps.reports.outputs.has-codeclimate }}
       has-coveralls: ${{ steps.reports.outputs.has-coveralls }}
 
     steps:
@@ -100,10 +100,8 @@ jobs:
       - name: Reports
         id: reports
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
         run: |
-          if ! [ -z "${CC_TEST_REPORTER_ID}" ]; then echo "has-codeclimate=1" >> $GITHUB_OUTPUT; fi
           if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> $GITHUB_OUTPUT; fi
 
       - name: Repository
@@ -125,14 +123,13 @@ jobs:
         env:
           APP_VERSION: ${{ steps.repo.outputs.app-version }}
           BRANCH_NAME: ${{ steps.repo.outputs.branch-name }}
-          CODECLIMATE: ${{ steps.reports.outputs.has-codeclimate }}
           COVERALLS: ${{ steps.reports.outputs.has-coveralls }}
           PHP_VERSION: ${{ inputs.php-version }}
         run: |
           # Generate image tag with timestamp and commit
           echo "image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
-          if [ "$CODECLIMATE" == '1' ] || [ "$COVERALLS" == '1' ]; then
+          if [ "$COVERALLS" == '1' ]; then
             echo "should-reports=1" >> $GITHUB_OUTPUT;
           fi
 
