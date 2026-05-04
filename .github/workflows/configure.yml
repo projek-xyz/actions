@@ -11,22 +11,36 @@ on:
       laravel-version:
         required: false
         type: string
+      target-env:
+        required: false
+        type: string
     secrets:
       CC_TEST_REPORTER_ID:
         required: false
       COVERALLS_REPO_TOKEN:
         required: false
     outputs:
+      # Composer
       composer-cache-dir:
         value: ${{ jobs.environments.outputs.composer-cache-dir }}
       composer-cache-key:
         value: ${{ jobs.environments.outputs.composer-cache-key }}
-      target-branch:
-        value: ${{ jobs.environments.outputs.target-branch }}
-      should-reports:
-        value: ${{ jobs.environments.outputs.should-reports }}
+      # Docer Built
+      image-tag:
+        value: ${{ jobs.environments.outputs.image-tag }}
+      # Deployment
+      should-deploy:
+        value: ${{ jobs.environments.outputs.should-deploy }}
+      target-env:
+        value: ${{ jobs.environments.outputs.target-env }}
+      # Repository
       repository-name:
         value: ${{ jobs.environments.outputs.repository-name }}
+      target-branch:
+        value: ${{ jobs.environments.outputs.target-branch }}
+      # Test Reports
+      should-reports:
+        value: ${{ jobs.environments.outputs.should-reports }}
       has-codeclimate:
         value: ${{ jobs.environments.outputs.has-codeclimate }}
       has-coveralls:
@@ -46,7 +60,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check configs
+        id: check
+        run: |
+          if [ -f ".github/labeler.yml" ] || [ -f ".github/labeler.yaml" ]; then
+            echo "should-label=1" >> $GITHUB_OUTPUT
+          fi
+
       - name: Labeler
+        if: steps.check.outputs.should-label == '1'
         uses: actions/labeler@v6
         with:
           dot: true
@@ -55,12 +77,19 @@ jobs:
     name: Environments
     runs-on: ubuntu-latest
     outputs:
+      # Composer
       composer-cache-dir: ${{ steps.composer.outputs.composer-cache-dir }}
       composer-cache-key: ${{ steps.composer.outputs.composer-cache-key }}
-      docker-image-tag: ${{ steps.environment.outputs.docker-image-tag }}
-      should-reports: ${{ steps.environment.outputs.should-reports }}
+      # Deployment
+      should-deploy: ${{ steps.deploy.outputs.should-deploy }}
+      target-env: ${{ steps.deploy.outputs.target-env }}
+      # Docker Built
+      image-tag: ${{ steps.environment.outputs.image-tag }}
+      # Repository
       repository-name: ${{ steps.repo.outputs.lower-name }}
       target-branch: ${{ steps.repo.outputs.branch-name }}
+      # Test Reports
+      should-reports: ${{ steps.environment.outputs.should-reports }}
       has-codeclimate: ${{ steps.reports.outputs.has-codeclimate }}
       has-coveralls: ${{ steps.reports.outputs.has-coveralls }}
 
@@ -101,7 +130,7 @@ jobs:
           PHP_VERSION: ${{ inputs.php-version }}
         run: |
           # Generate image tag with timestamp and commit
-          echo "docker-image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
           if [ "$CODECLIMATE" == '1' ] || [ "$COVERALLS" == '1' ]; then
             echo "should-reports=1" >> $GITHUB_OUTPUT;
@@ -110,6 +139,25 @@ jobs:
           if ! [ -z "${PHP_VERSION}" ]; then
             echo "has-php=1" >> $GITHUB_OUTPUT;
           fi
+
+      - name: Deploy
+        id: deploy
+        env:
+          TARGET_ENV: ${{ inputs.target-env }}
+        run: |
+          # Set deployment environment
+          DEPLOYABLE=0
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "target-env=${TARGET_ENV}" >> $GITHUB_OUTPUT
+            DEPLOYABLE=1
+          elif [[ "$BRANCH_NAME" == "main" ]]; then
+            echo "target-env=develop" >> $GITHUB_OUTPUT
+          else
+            echo "target-env=staging" >> $GITHUB_OUTPUT
+          fi
+
+          echo "should-deploy=$DEPLOYABLE" >> $GITHUB_OUTPUT
 
       - name: Setup PHP
         if: steps.environment.outputs.has-php == '1'
