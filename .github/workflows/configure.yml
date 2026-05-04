@@ -143,6 +143,7 @@ jobs:
       - name: Deploy
         id: deploy
         env:
+          BRANCH_NAME: ${{ steps.repo.outputs.branch-name }}
           TARGET_ENV: ${{ inputs.target-env }}
         run: |
           # Set deployment environment
