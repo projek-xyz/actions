@@ -39,13 +39,24 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
         FILES: ${{ inputs.files }}
       run: |
+        mapfile -t patterns <<< "$FILES"
+
         shopt -s nullglob
-        for f in $FILES; do
-          if [ -f "$f" ]; then
-            echo "::group::Uploading $f..."
-            gh release upload "$GITHUB_REF_NAME" "$f" --clobber
-            echo '::endgroup::'
-          else
-            echo "Skipping missing file: $f"
-          fi
+
+        for pattern in "${patterns[@]}"; do
+          p=$(echo "$pattern" | xargs)
+
+          [ -z "$p" ] && continue
+
+          (
+            IFS=''
+            files=($p)
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "No files matched pattern: $p"
+            else
+              echo "::group::Uploading matches for $p..."
+              gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+              echo '::endgroup::'
+            fi
+          )
         done
