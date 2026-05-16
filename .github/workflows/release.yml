@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ''
+      artifact_name:
+        description: Name of the artifact to download
+        required: false
+        type: string
+        default: 'release-archives'
 
 jobs:
   publish:
@@ -33,11 +38,70 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
       run: npx changelogithub
 
-    - name: Upload Release Assets
-      if: ${{ inputs.files != '' }}
+    - name: File to upload
+      id: asset-files
+      if: inputs.files != ''
+      uses: actions/github-script@v9
       env:
-        GITHUB_TOKEN: ${{ github.token }}
         FILES: ${{ inputs.files }}
+        ARTIFACT_NAME: ${{ inputs.artifact_name }}
+      with:
+        result-encoding: string
+        script: |
+          const { owner, repo } = context.repo;
+          const artifact_name = process.env.ARTIFACT_NAME;
+
+          try {
+            const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
+            const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
+
+            if (!workflow) return;
+
+            const { data: { workflow_runs: main_runs } } = await github.rest.actions.listWorkflowRuns({
+              branch: 'main',
+              event: 'push',
+              workflow_id: workflow.id,
+              status: 'completed',
+              conclusion: 'success',
+              per_page: 1,
+              owner,
+              repo,
+            });
+
+            if (main_runs.length === 0) return;
+
+            const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: main_runs[0].id,
+              name: artifact_name,
+            });
+
+            if (artifacts.length === 0) return;
+
+            for (const artifact of artifacts) {
+              const download = await github.rest.actions.downloadArtifact({
+                owner,
+                repo,
+                artifact_id: artifact.id,
+                archive_format: 'zip',
+              });
+            }
+
+            console.log(download)
+
+            return '';
+          } catch (error) {
+            core.setFailed(`Failed to get previous run: ${error.message}`);
+
+            return;
+          }
+
+    - name: Upload Release Assets
+      if: steps.asset-files.outputs.result != ''
+      env:
+        ASSET_FILES: ${{ steps.asset-files.outputs.result }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         mapfile -t patterns <<< "$FILES"
 
