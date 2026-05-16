@@ -40,7 +40,7 @@ jobs:
 
     - name: File to upload
       id: asset-files
-      if: inputs.files != ''
+      if: inputs.files == ''
       uses: actions/github-script@v9
       env:
         FILES: ${{ inputs.files }}
@@ -86,9 +86,9 @@ jobs:
                 artifact_id: artifact.id,
                 archive_format: 'zip',
               });
-            }
 
-            console.log(download)
+              console.log(download)
+            }
 
             return '';
           } catch (error) {
@@ -98,7 +98,7 @@ jobs:
           }
 
     - name: Upload Release Assets
-      if: steps.asset-files.outputs.result != ''
+      if: steps.asset-files.outputs.result != '' || inputs.files != ''
       env:
         ASSET_FILES: ${{ steps.asset-files.outputs.result }}
         GITHUB_TOKEN: ${{ github.token }}
