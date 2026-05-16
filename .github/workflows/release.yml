@@ -55,6 +55,7 @@ jobs:
             const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
             const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
 
+            console.log('workflow', workflow)
             if (!workflow) return;
 
             const { data: { workflow_runs: main_runs } } = await github.rest.actions.listWorkflowRuns({
@@ -68,6 +69,7 @@ jobs:
               repo,
             });
 
+            console.log('main_runs', main_runs)
             if (main_runs.length === 0) return;
 
             const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
@@ -77,6 +79,7 @@ jobs:
               name: artifact_name,
             });
 
+            console.log('artifacts', artifacts)
             if (artifacts.length === 0) return;
 
             for (const artifact of artifacts) {
