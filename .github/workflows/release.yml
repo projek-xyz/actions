@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: 'release-archives'
+      workflow_name:
+        description: Name of the workflow to download artifacts from
+        required: false
+        type: string
+        default: ''
 
 jobs:
   publish:
@@ -45,15 +50,17 @@ jobs:
       env:
         FILES: ${{ inputs.files }}
         ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        WORKFLOW_NAME: ${{ inputs.workflow_name }}
       with:
         result-encoding: string
         script: |
           const { owner, repo } = context.repo;
           const artifact_name = process.env.ARTIFACT_NAME;
+          const workflow_name = process.env.WORKFLOW_NAME || process.env.GITHUB_WORKFLOW;
 
           try {
             const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
-            const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
+            const workflow = workflows.find(w => w.name === workflow_name);
 
             console.log('workflow', workflow)
             if (!workflow) return;
