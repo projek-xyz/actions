@@ -2,6 +2,12 @@ name: Release
 
 on:
   workflow_call:
+    inputs:
+      files:
+        description: Multiline list of files or wildcards to upload
+        required: false
+        type: string
+        default: ''
 
 jobs:
   publish:
@@ -23,6 +29,23 @@ jobs:
         node-version: lts/*
 
     - name: Release Changelog
-      run: npx changelogithub
       env:
         GITHUB_TOKEN: ${{ github.token }}
+      run: npx changelogithub
+
+    - name: Upload Release Assets
+      if: ${{ inputs.files != '' }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        FILES: ${{ inputs.files }}
+      run: |
+        shopt -s nullglob
+        for f in $FILES; do
+          if [ -f "$f" ]; then
+            echo "::group::Uploading $f..."
+            gh release upload "$GITHUB_REF_NAME" "$f" --clobber
+            echo '::endgroup::'
+          else
+            echo "Skipping missing file: $f"
+          fi
+        done
