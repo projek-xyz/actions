@@ -132,6 +132,8 @@ jobs:
       run: |
         FILES="${LISTED_FILES:-$ARTIFACT_FILES}"
 
+        [ -z "$FILES" ] && exit 0
+
         mapfile -t patterns <<< "$FILES"
 
         shopt -s nullglob
