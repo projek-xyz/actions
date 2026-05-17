@@ -49,7 +49,7 @@ jobs:
       run: npx changelogithub
 
     - name: File to upload
-      id: asset-files
+      id: artifact-files
       if: inputs.files == ''
       uses: actions/github-script@v9
       env:
@@ -92,10 +92,10 @@ jobs:
               repo,
             });
 
-            console.log('artifacts', artifacts)
             if (artifacts.length === 0) return;
 
             const fs = require('fs')
+            const files = []
 
             for (const artifact of artifacts) {
               const { data: download } = await github.rest.actions.downloadArtifact({
@@ -109,10 +109,14 @@ jobs:
               fs.mkdirSync(artifact_name, { recursive: true });
 
               await exec.exec('unzip', [`${artifact_name}.zip`, '-d', `./${artifact_name}`]);
-              await exec.exec('ls', ['-lah', `./${artifact_name}`]);
+
+              for (const file of fs.readdirSync(`./${artifact_name}`)) {
+                files.push(`${artifact_name}/${file}`);
+              }
             }
 
-            return '';
+            console.log(files)
+            return files.join('\n');
           } catch (error) {
             core.setFailed(`Failed to get previous run: ${error.message}`);
 
@@ -120,11 +124,14 @@ jobs:
           }
 
     - name: Upload Release Assets
-      if: steps.asset-files.outputs.result != '' || inputs.files != ''
+      if: steps.artifact-files.outputs.result != '' || inputs.files != ''
       env:
-        ASSET_FILES: ${{ steps.asset-files.outputs.result }}
+        LISTED_FILES: ${{ inputs.files }}
+        ARTIFACT_FILES: ${{ steps.artifact-files.outputs.result }}
         GITHUB_TOKEN: ${{ github.token }}
       run: |
+        FILES="${LISTED_FILES:-$ARTIFACT_FILES}"
+
         mapfile -t patterns <<< "$FILES"
 
         shopt -s nullglob
