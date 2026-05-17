@@ -56,7 +56,7 @@ jobs:
             const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
             const workflow = workflows.find(w => w.name === workflow_name);
 
-            if (!workflow) return;
+            if (!workflow) return '';
 
             const { data: { workflow_runs: main_runs } } = await github.rest.actions.listWorkflowRuns({
               branch: branch_name,
@@ -69,7 +69,7 @@ jobs:
               repo,
             });
 
-            if (main_runs.length === 0) return;
+            if (main_runs.length === 0) return '';
 
             const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
               run_id: main_runs[0].id,
@@ -79,7 +79,7 @@ jobs:
               repo,
             });
 
-            if (artifacts.length === 0) return;
+            if (artifacts.length === 0) return '';
 
             const fs = require('fs')
             const files = []
@@ -107,7 +107,7 @@ jobs:
           } catch (error) {
             core.setFailed(`Failed to get previous run: ${error.message}`);
 
-            return;
+            return '';
           }
 
     - name: Upload Release Assets
