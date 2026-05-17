@@ -129,7 +129,7 @@ jobs:
             console.log(files)
             return files.join('\n');
           } catch (error) {
-            core.setFailed(`Failed to get previous run: ${error.message}`);
+            core.setFailed(`Failed to retrieve artifacts: ${error.message}`);
 
             return '';
           }
@@ -151,20 +151,28 @@ jobs:
 
         shopt -s nullglob
 
+        echo "::debug::files: ${files[@]}"
+
         for file in "${files[@]}"; do
-          f=$(echo "$file" | xargs)
+          file=$(echo "$file" | xargs)
 
-          [ -z "$f" ] && continue
+          echo "::debug::File: $file"
 
+          [ -z "$file" ] && continue
+
+          file_name=$(basename "$file")
+
+          echo "::group::Uploading '$file_name'..."
           (
             IFS=''
-            files=($f)
-            if [ ${#files[@]} -eq 0 ]; then
-              echo "No files matched file: $f"
+            files=($file)
+            if [[ ${#files[@]} -eq 0 || ! -f "$file" ]]; then
+              echo "Skipping: '$file', file not found"
             else
-              echo "::group::Uploading matches for $f..."
               gh release upload "$RELEASE_VERSION" "${files[@]}" --clobber
-              echo '::endgroup::'
+              echo "Success: '$file' uploaded to release '$RELEASE_VERSION'"
             fi
           )
+
+          echo '::endgroup::'
         done
