@@ -1,0 +1,199 @@
+name: Uploads
+
+on:
+  workflow_call:
+    inputs:
+      files:
+        description: Multiline list of files or wildcards to upload
+        required: false
+        type: string
+        default: ''
+      artifact_name:
+        description: Name of the artifact to download
+        required: false
+        type: string
+        default: 'release-archives'
+      branch_name:
+        description: Name of the branch to download artifacts from
+        required: false
+        type: string
+        default: 'main'
+      workflow_name:
+        description: Name of the workflow to download artifacts from
+        required: false
+        type: string
+        default: ''
+      check_attempts:
+        description: Number of times to check for release availability
+        required: false
+        type: number
+        default: 10
+
+jobs:
+  uploads:
+    name: Uploads
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Release version
+      id: release-version
+      shell: bash
+      env:
+        ATTEMPTS: ${{ inputs.check_attempts }}
+        GITHUB_TOKEN: ${{ github.token }}
+        LATEST_COMMIT: ${{ github.event.head_commit.message }}
+      run: |
+        RELEASE_VERSION=$(echo "$LATEST_COMMIT" | head -n 1 | sed 's/chore(release): /v/')
+
+        if [[ "$RELEASE_VERSION" == "$GITHUB_REF_NAME" ]]; then
+          echo "result=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        RESULT=
+
+        echo "Release version: $RELEASE_VERSION"
+
+        for a in $(seq 1 "${ATTEMPTS}"); do
+          echo "Attempt ${a}/${ATTEMPTS}: waiting for release '$RELEASE_VERSION' to be available..."
+          if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "Release $RELEASE_VERSION found!"
+            RESULT=$RELEASE_VERSION
+            break
+          fi
+          sleep 5s
+        done
+
+        if [[ -z "$RESULT" ]]; then
+          echo "Release '$RELEASE_VERSION' not found after $ATTEMPTS attempts."
+          exit 0
+        fi
+
+        echo "result=$RESULT" >> $GITHUB_OUTPUT
+
+    - name: File to upload
+      id: artifact-files
+      if: |-
+        steps.release-version.outputs.result != '' &&
+        (inputs.files == '' && inputs.workflow_name != '')
+      uses: actions/github-script@v9
+      env:
+        BRANCH_NAME: ${{ inputs.branch_name }}
+        ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        WORKFLOW_NAME: ${{ inputs.workflow_name }}
+      with:
+        result-encoding: string
+        script: |
+          const { owner, repo } = context.repo;
+          const branch_name = process.env.BRANCH_NAME;
+          const artifact_name = process.env.ARTIFACT_NAME;
+          const workflow_name = process.env.WORKFLOW_NAME;
+
+          try {
+            const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
+            const workflow = workflows.find(w => w.name === workflow_name);
+
+            if (!workflow) return '';
+
+            const { data: { workflow_runs: main_runs } } = await github.rest.actions.listWorkflowRuns({
+              branch: branch_name,
+              event: 'push',
+              workflow_id: workflow.id,
+              status: 'completed',
+              conclusion: 'success',
+              per_page: 1,
+              owner,
+              repo,
+            });
+
+            if (main_runs.length === 0) return '';
+
+            const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+              run_id: main_runs[0].id,
+              name: artifact_name,
+              per_page: 1,
+              owner,
+              repo,
+            });
+
+            if (artifacts.length === 0) return '';
+
+            const fs = require('fs')
+            const files = []
+
+            for (const artifact of artifacts) {
+              const { data: download } = await github.rest.actions.downloadArtifact({
+                artifact_id: artifact.id,
+                archive_format: 'zip',
+                owner,
+                repo,
+              });
+
+              fs.writeFileSync(`${artifact_name}.zip`, Buffer.from(download));
+              fs.mkdirSync(artifact_name, { recursive: true });
+
+              await exec.exec('unzip', [`${artifact_name}.zip`, '-d', `./${artifact_name}`]);
+
+              for (const file of fs.readdirSync(`./${artifact_name}`)) {
+                files.push(`${artifact_name}/${file}`);
+              }
+            }
+
+            console.log(files)
+            return files.join('\n');
+          } catch (error) {
+            core.setFailed(`Failed to retrieve artifacts: ${error.message}`);
+
+            return '';
+          }
+
+    - name: Upload assets
+      if: |-
+        steps.release-version.outputs.result != '' &&
+        (steps.artifact-files.outputs.result != '' || inputs.files != '')
+      shell: bash
+      env:
+        LISTED_FILES: ${{ inputs.files }}
+        ARTIFACT_FILES: ${{ steps.artifact-files.outputs.result }}
+        GITHUB_TOKEN: ${{ github.token }}
+        RELEASE_VERSION: ${{ steps.release-version.outputs.result }}
+      run: |
+        FILES="${LISTED_FILES:-$ARTIFACT_FILES}"
+
+        [ -z "$FILES" ] && exit 0
+
+        mapfile -t files <<< "$FILES"
+
+        shopt -s nullglob
+
+        echo "::debug::files: ${files[@]}"
+
+        for file in "${files[@]}"; do
+          file=$(echo "$file" | xargs)
+
+          echo "::debug::File: $file"
+
+          [ -z "$file" ] && continue
+
+          file_name=$(basename "$file")
+
+          echo "::group::Uploading '$file_name'..."
+          (
+            IFS=''
+            files=($file)
+            if [[ ${#files[@]} -eq 0 ]]; then
+              echo "Skipping: '$file', file not found"
+            else
+              gh release upload "$RELEASE_VERSION" "${files[@]}" --clobber
+              echo "Success: '$file' uploaded to release '$RELEASE_VERSION'"
+            fi
+          )
+
+          echo '::endgroup::'
+        done
