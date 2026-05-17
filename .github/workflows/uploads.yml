@@ -136,6 +136,7 @@ jobs:
 
     - name: Upload assets
       if: steps.artifact-files.outputs.result != '' || inputs.files != ''
+      shell: bash
       env:
         LISTED_FILES: ${{ inputs.files }}
         ARTIFACT_FILES: ${{ steps.artifact-files.outputs.result }}
@@ -146,22 +147,22 @@ jobs:
 
         [ -z "$FILES" ] && exit 0
 
-        mapfile -t patterns <<< "$FILES"
+        mapfile -t files <<< "$FILES"
 
         shopt -s nullglob
 
-        for pattern in "${patterns[@]}"; do
-          p=$(echo "$pattern" | xargs)
+        for file in "${files[@]}"; do
+          f=$(echo "$file" | xargs)
 
-          [ -z "$p" ] && continue
+          [ -z "$f" ] && continue
 
           (
             IFS=''
-            files=($p)
+            files=($f)
             if [ ${#files[@]} -eq 0 ]; then
-              echo "No files matched pattern: $p"
+              echo "No files matched file: $f"
             else
-              echo "::group::Uploading matches for $p..."
+              echo "::group::Uploading matches for $f..."
               gh release upload "$RELEASE_VERSION" "${files[@]}" --clobber
               echo '::endgroup::'
             fi
