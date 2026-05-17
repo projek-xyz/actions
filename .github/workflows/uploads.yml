@@ -187,7 +187,7 @@ jobs:
           (
             IFS=''
             files=($file)
-            if [[ ${#files[@]} -eq 0 || ! -f "$file" ]]; then
+            if [[ ${#files[@]} -eq 0 ]]; then
               echo "Skipping: '$file', file not found"
             else
               gh release upload "$RELEASE_VERSION" "${files[@]}" --clobber
