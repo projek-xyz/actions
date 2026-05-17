@@ -8,16 +8,16 @@ on:
         required: false
         type: string
         default: ''
-      branch_name:
-        description: Name of the branch
-        required: false
-        type: string
-        default: 'main'
       artifact_name:
         description: Name of the artifact to download
         required: false
         type: string
         default: 'release-archives'
+      branch_name:
+        description: Name of the branch to download artifacts from
+        required: false
+        type: string
+        default: 'main'
       workflow_name:
         description: Name of the workflow to download artifacts from
         required: false
@@ -50,7 +50,7 @@ jobs:
 
     - name: File to upload
       id: artifact-files
-      if: inputs.files == ''
+      if: inputs.files == '' && inputs.workflow_name != ''
       uses: actions/github-script@v9
       env:
         FILES: ${{ inputs.files }}
@@ -63,7 +63,7 @@ jobs:
           const { owner, repo } = context.repo;
           const branch_name = process.env.BRANCH_NAME;
           const artifact_name = process.env.ARTIFACT_NAME;
-          const workflow_name = process.env.WORKFLOW_NAME || process.env.GITHUB_WORKFLOW;
+          const workflow_name = process.env.WORKFLOW_NAME;
 
           try {
             const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
