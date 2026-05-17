@@ -25,8 +25,8 @@ on:
         default: ''
 
 jobs:
-  publish:
-    name: Publish
+  assets:
+    name: Upload assets
     runs-on: ubuntu-latest
 
     permissions:
