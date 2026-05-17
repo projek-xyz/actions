@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ''
+      check_attemps:
+        description: Number of times to check for release availability
+        required: false
+        type: number
+        default: 10
 
 jobs:
   uploads:
@@ -40,16 +45,23 @@ jobs:
       id: release-version
       shell: bash
       env:
+        ATTEMPTS: ${{ inputs.check_attemps }}
         GITHUB_TOKEN: ${{ github.token }}
         LATEST_COMMIT: ${{ github.event.head_commit.message }}
       run: |
         RELEASE_VERSION=$(echo "$LATEST_COMMIT" | head -n 1 | sed 's/chore(release): /v/')
-        RESULT=$GITHUB_REF_NAME
+
+        if [[ "$RELEASE_VERSION" == "$GITHUB_REF_NAME" ]]; then
+          echo "result=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        RESULT=
 
         echo "Release version: $RELEASE_VERSION"
 
-        for _ in {1..10}; do
-          echo "Checking for release $RELEASE_VERSION to be available..."
+        for a in {1..${ATTEMPTS}}; do
+          echo "Attempt $a/${ATTEMPTS}: waiting for release '$RELEASE_VERSION' to be available..."
           if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "Release $RELEASE_VERSION found!"
             RESULT=$RELEASE_VERSION
@@ -57,6 +69,11 @@ jobs:
           fi
           sleep 5s
         done
+
+        if [[ -z "$RESULT" ]]; then
+          echo "Release '$RELEASE_VERSION' not found after $ATTEMPTS attempts."
+          exit 0
+        fi
 
         echo "result=$RESULT" >> $GITHUB_OUTPUT
 
