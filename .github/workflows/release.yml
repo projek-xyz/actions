@@ -95,6 +95,8 @@ jobs:
             console.log('artifacts', artifacts)
             if (artifacts.length === 0) return;
 
+            const fs = require('fs')
+
             for (const artifact of artifacts) {
               const { data: download } = await github.rest.actions.downloadArtifact({
                 artifact_id: artifact.id,
