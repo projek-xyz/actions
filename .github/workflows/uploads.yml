@@ -1,4 +1,4 @@
-name: Release
+name: Uploads
 
 on:
   workflow_call:
@@ -25,8 +25,8 @@ on:
         default: ''
 
 jobs:
-  assets:
-    name: Upload assets
+  uploads:
+    name: Uploads
     runs-on: ubuntu-latest
 
     permissions:
