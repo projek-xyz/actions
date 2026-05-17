@@ -79,7 +79,9 @@ jobs:
 
     - name: File to upload
       id: artifact-files
-      if: inputs.files == '' && inputs.workflow_name != ''
+      if: |-
+        steps.release-version.outputs.result != '' &&
+        (inputs.files == '' && inputs.workflow_name != '')
       uses: actions/github-script@v9
       env:
         BRANCH_NAME: ${{ inputs.branch_name }}
@@ -152,7 +154,9 @@ jobs:
           }
 
     - name: Upload assets
-      if: steps.artifact-files.outputs.result != '' || inputs.files != ''
+      if: |-
+        steps.release-version.outputs.result != '' &&
+        (steps.artifact-files.outputs.result != '' || inputs.files != '')
       shell: bash
       env:
         LISTED_FILES: ${{ inputs.files }}
