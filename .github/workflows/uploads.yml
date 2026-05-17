@@ -23,7 +23,7 @@ on:
         required: false
         type: string
         default: ''
-      check_attemps:
+      check_attempts:
         description: Number of times to check for release availability
         required: false
         type: number
@@ -45,7 +45,7 @@ jobs:
       id: release-version
       shell: bash
       env:
-        ATTEMPTS: ${{ inputs.check_attemps }}
+        ATTEMPTS: ${{ inputs.check_attempts }}
         GITHUB_TOKEN: ${{ github.token }}
         LATEST_COMMIT: ${{ github.event.head_commit.message }}
       run: |
