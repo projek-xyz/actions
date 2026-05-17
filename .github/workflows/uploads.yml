@@ -36,6 +36,30 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v6
 
+    - name: Release version
+      id: release-version
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        LATEST_COMMIT: ${{ github.event.head_commit.message }}
+      run: |
+        RELEASE_VERSION=$(echo "$LATEST_COMMIT" | head -n 1 | sed 's/chore(release): /v/')
+        RESULT=$GITHUB_REF_NAME
+
+        echo "Release version: $RELEASE_VERSION"
+
+        for _ in {1..10}; do
+          echo "Checking for release $RELEASE_VERSION to be available..."
+          if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+            echo "Release $RELEASE_VERSION found!"
+            RESULT=$RELEASE_VERSION
+            break
+          fi
+          sleep 5s
+        done
+
+        echo "result=$RESULT" >> $GITHUB_OUTPUT
+
     - name: File to upload
       id: artifact-files
       if: inputs.files == '' && inputs.workflow_name != ''
@@ -110,12 +134,13 @@ jobs:
             return '';
           }
 
-    - name: Upload Release Assets
+    - name: Upload assets
       if: steps.artifact-files.outputs.result != '' || inputs.files != ''
       env:
         LISTED_FILES: ${{ inputs.files }}
         ARTIFACT_FILES: ${{ steps.artifact-files.outputs.result }}
         GITHUB_TOKEN: ${{ github.token }}
+        RELEASE_VERSION: ${{ steps.release-version.outputs.result }}
       run: |
         FILES="${LISTED_FILES:-$ARTIFACT_FILES}"
 
@@ -137,7 +162,7 @@ jobs:
               echo "No files matched pattern: $p"
             else
               echo "::group::Uploading matches for $p..."
-              gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+              gh release upload "$RELEASE_VERSION" "${files[@]}" --clobber
               echo '::endgroup::'
             fi
           )
