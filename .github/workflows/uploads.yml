@@ -60,8 +60,8 @@ jobs:
 
         echo "Release version: $RELEASE_VERSION"
 
-        for a in {1..${ATTEMPTS}}; do
-          echo "Attempt $a/${ATTEMPTS}: waiting for release '$RELEASE_VERSION' to be available..."
+        for a in $(seq 1 "${ATTEMPTS}"); do
+          echo "Attempt ${a}/${ATTEMPTS}: waiting for release '$RELEASE_VERSION' to be available..."
           if gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "Release $RELEASE_VERSION found!"
             RESULT=$RELEASE_VERSION
