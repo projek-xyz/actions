@@ -303,7 +303,7 @@ jobs:
 
       - name: Previous workflow run
         id: previous-run
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           CURRENT_BRANCH: ${{ steps.project.outputs.branch-name }}
           TARGET_BRANCH: ${{ steps.project.outputs.base-branch }}
@@ -382,7 +382,7 @@ jobs:
           github.event_name != 'workflow_dispatch' &&
           steps.previous-run.outputs.available == '1'
         id: changed-files
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}
           CURRENT_SHA: ${{ github.sha }}
