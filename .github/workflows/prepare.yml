@@ -1,0 +1,320 @@
+name: Prepare
+
+on:
+  workflow_call:
+    inputs:
+      default-branch:
+        required: false
+        type: string
+        default: ${{ github.event.repository.default_branch || 'main' }}
+      php-version:
+        required: false
+        type: string
+        default: ${{ vars.PHP_VERSION || '8.1' }}
+      node-version:
+        required: false
+        type: string
+        default: ${{ vars.NODE_VERSION || 'lts/*' }}
+      pnpm-version:
+        required: false
+        type: string
+        default: ${{ vars.PNPM_VERSION || '10.12.4' }}
+      bun-version:
+        required: false
+        type: string
+        default: ${{ vars.BUN_VERSION || '1.3.10' }}
+      target-env:
+        required: false
+        type: string
+    outputs:
+      # Composer
+      composer-cache-dir:
+        value: ${{ jobs.environments.outputs.composer-cache-dir }}
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+      COVERALLS_REPO_TOKEN:
+        required: false
+
+jobs:
+  labels:
+    name: Labels
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+  environments:
+    name: Environments
+    runs-on: ubuntu-latest
+    outputs:
+      # Project
+      project-repo-name: ${{ steps.project.outputs.repo-name }}
+      project-branch-name: ${{ steps.project.outputs.branch-name }}
+      project-version: ${{ steps.project.outputs.version }}
+      previous-run: ${{ steps.previous-run.outputs.result }}
+      # PHP Project
+      needs-php: ${{ steps.php.outputs.needs-php || '0' }}
+      needs-composer: ${{ steps.php.outputs.needs-composer || '0' }}
+      needs-wpcli: ${{ steps.php.outputs.needs-wpcli || '0' }}
+      is-laravel: ${{ steps.php.outputs.is-laravel || '0' }}
+      composer-cache-dir: ${{ steps.php-caches.outputs.composer-dir }}
+      wpcli-cache-dir: ${{ steps.php-caches.outputs.wpcli-dir }}
+      # Node Project
+      node-pm-name: ${{ steps.node.outputs.pm-name }}
+      node-pm-version: ${{ steps.node.outputs.pm-version }}
+      needs-node: ${{ steps.node.outputs.needs-node || '0' }}
+      needs-pnpm: ${{ steps.node.outputs.needs-pnpm || '0' }}
+      needs-bun: ${{ steps.node.outputs.needs-bun || '0' }}
+      # Test Reports
+      has-codecov: ${{ steps.reports.outputs.has-codecov || '0' }}
+      has-coveralls: ${{ steps.reports.outputs.has-coveralls || '0' }}
+      should-reports: ${{ steps.reports.outputs.should-reports || '0' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: PHP Requirements
+        id: php
+        run: |
+          # Whether it's requires PHP runtime
+          NEEDS_COMPOSER=$(test -f ./composer.json && echo 1 || echo 0)
+          NEEDS_WPCLI=$(test -f ./wp-cli.yml && echo 1 || echo 0)
+          PHP_TOOLS=
+
+          # Whether the repository has composer.json
+          echo "needs-composer=$(test -f ./composer.json && echo 1 || echo 0)" >> $GITHUB_OUTPUT
+
+          # Whether the repository has wp-cli.yml
+          echo "needs-wpcli=${NEEDS_WPCLI}" >> $GITHUB_OUTPUT
+
+          # Whether the repository is a laravel project
+          echo "is-laravel=$(test -x ./artisan && echo 1 || echo 0)" >> $GITHUB_OUTPUT
+
+          if [[ $NEEDS_COMPOSER -eq 1 ]]; then PHP_TOOLS="$PHP_TOOLS,composer"; fi
+          if [[ $NEEDS_WPCLI -eq 1 ]]; then PHP_TOOLS="$PHP_TOOLS,wp-cli"; fi
+
+          echo "needs-php=$([ -z "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
+          echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
+
+      - name: Node Requirements
+        id: node
+        run: |
+          # Whether it's requires Node runtime'
+          PM_NAME=
+          PM_VERSION=
+
+          # Whether the repository has package.json
+          NEEDS_NODE=$(test -f ./package.json && echo 1 || echo 0)
+
+          # Whether the repository require a pnpm
+          NEEDS_PNPM=$(test -f ./pnpm-lock.yaml && echo 1 || echo 0)
+
+          # Whether the repository require a bun
+          NEEDS_BUN=$(test -f ./bun.lock && echo 1 || echo 0)
+
+          if [[ $NEEDS_NODE -eq 1 ]]; then PM_NAME=npm; fi
+          if [[ $NEEDS_PNPM -eq 1 ]]; then PM_NAME=pnpm; fi
+          if [[ $NEEDS_BUN -eq 1 ]]; then PM_NAME=bun; fi
+
+          if [[ $NEEDS_NODE -eq 1 ]]; then
+            pkg_namager=$(cat package.json | jq -r '.packageManager')
+            arr=(${pkg_namager//@/ })
+
+            PM_NAME=${arr[0]}
+            PM_VERSION=${arr[1]}
+          fi
+
+          echo "needs-node=$NEEDS_NODE" >> $GITHUB_OUTPUT
+          echo "needs-pnpm=$NEEDS_PNPM" >> $GITHUB_OUTPUT
+          echo "needs-bun=$NEEDS_BUN" >> $GITHUB_OUTPUT
+          echo "pm-name=$PM_NAME" >> $GITHUB_OUTPUT
+          echo "pm-version=$PM_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Project
+        id: project
+        env:
+          HAS_NODE: ${{ steps.node.outputs.need-node }}
+        run: |
+          # Extract repository name and convert to lowercase
+          REPO_NAME=$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]')
+
+          # Extract repository branch name
+          BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
+          BRANCH_SLUG=${BRANCH_NAME//\//-}.${GITHUB_SHA:0:8}
+
+          if [[ $HAS_NODE -eq 1 ]]; then
+            # Extract version number from `package.json` file
+            echo "version=$(cat package.json | jq -r '.version')" >> $GITHUB_OUTPUT
+          fi
+
+          echo "repo-name=$REPO_NAME" >> $GITHUB_OUTPUT
+          echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "branch-slug=$BRANCH_SLUG" >> $GITHUB_OUTPUT
+
+      - name: Setup PHP
+        if: steps.php.outputs.needs-php == '1'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          tools: ${{ steps.php.outputs.php-tools }}
+          coverage: none
+
+      - name: PHP Caches
+        if: steps.php.outputs.needs-php == '1'
+        id: php-caches
+        env:
+          NEEDS_COMPOSER: ${{ steps.php.outputs.needs-composer }}
+          NEEDS_WPCLI: ${{ steps.php.outputs.needs-wpcli }}
+        run: |
+          if [[ $NEEDS_COMPOSER -eq 1 ]]; then
+            echo "composer-dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+          fi
+
+          if [[ $NEEDS_WPCLI -eq 1 ]]; then
+            echo "wpcli-dir=$(wp cli info --format=json | jq -r '.wp_cli_cache_dir_path')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Reports
+        id: reports
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: |
+          SHOULD_REPORTS=0
+
+          if [[ -n "${CODECOV_TOKEN}" ]]; then
+            echo "has-codecov=1" >> $GITHUB_OUTPUT;
+            SHOULD_REPORTS=1
+          fi
+
+          if [[ -n "${COVERALLS_REPO_TOKEN}" ]]; then
+            echo "has-coveralls=1" >> $GITHUB_OUTPUT;
+            SHOULD_REPORTS=1
+          fi
+
+          echo "should-reports=${SHOULD_REPORTS}" >> $GITHUB_OUTPUT
+
+      - name: Previous workflow run
+        id: previous-run
+        uses: actions/github-script@v7
+        env:
+          CURRENT_BRANCH: ${{ steps.project.outputs.branch-name }}
+          DEFAULT_BRANCH: ${{ inputs.default-branch }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.CURRENT_BRANCH;
+            const previous = {
+              sha: null,
+              message: null,
+              artifacts: [],
+            }
+
+            try {
+              const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
+              const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
+
+              if (!workflow) {
+                core.setOutput('available', 0);
+
+                return previous;
+              }
+
+              const branches = [
+                process.env.CURRENT_BRANCH,
+                process.env.DEFAULT_BRANCH,
+              ]
+
+              for (const branch of branches) {
+                const { data: { workflow_runs } } = await github.rest.actions.listWorkflowRuns({
+                  workflow_id: workflow.id,
+                  status: 'completed',
+                  conclusion: 'success',
+                  per_page: 1,
+                  branch,
+                  owner,
+                  repo,
+                });
+
+                if (workflow_runs.length === 0) continue;
+
+                previous.sha = workflow_runs[0].head_commit.id;
+                previous.message = workflow_runs[0].head_commit.message;
+
+                core.info(`Found ${workflow_runs.length} previously successful runs`);
+                core.debug(`Previous success run on '${branch}' branch commit sha: ${previous.sha}`);
+
+                const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+                  run_id: workflow_runs[0].id,
+                  owner,
+                  repo,
+                });
+
+                for (const artifact of artifacts) {
+                  previous.artifacts.push({
+                    id: artifact.id,
+                    name: artifact.name,
+                  })
+                }
+              }
+
+              core.setOutput('available', !!previous.sha ? 1 : 0);
+
+              return previous
+            } catch (error) {
+              core.notice(`Failed to get previous run: ${error.message}`);
+              core.setOutput('available', 0);
+
+              return previous;
+            }
+
+      - name: Get changed files
+        if: |-
+          github.event_name != 'workflow_dispatch' &&
+          steps.previous-run.outputs.available == '1'
+        id: changed-files
+        uses: actions/github-script@v7
+        env:
+          PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        with:
+          script: |
+            const files = [];
+
+            const prev_sha = process.env.PREVIOUS_SHA.substring(0, 8);
+            const curr_sha = process.env.CURRENT_SHA.substring(0, 8);
+
+            try {
+              await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
+                listeners: {
+                  stdout: (data) => {
+                    const changedFiles = data.toString().split('\n').map(f => f.trim())
+                    files.push(...changedFiles.filter(file => file.length > 0));
+                  }
+                }
+              });
+
+              for (const diff of files) {
+                core.info(`- \u001b[33m${diff}\u001b[0m`)
+              }
+
+              core.notice(`Found \u001b[1m${files.length}\u001b[0m files changed`);
+              core.setOutput('available', files.length ? 1 : 0);
+
+              return files;
+            } catch (error) {
+              core.notice(`Failed to get changed files: ${error.message}`);
+              core.setOutput('available', 0);
+
+              return files;
+            }
