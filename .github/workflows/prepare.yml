@@ -203,7 +203,10 @@ jobs:
 
           # Extract repository branch name
           BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
-          BRANCH_SLUG=${BRANCH_NAME//\//-}.${GITHUB_SHA:0:8}
+
+          # Extract branch slug
+          BRANCH_SLUG=$(echo $BRANCH_NAME | sed 's:/:_:g; s:[::g; s:]::g')
+          BRANCH_SLUG=${BRANCH_SLUG:0:20}.${GITHUB_SHA:0:8}
 
           PR_NUMBER=$([[ $BRANCH_NAME =~ "/merge" ]] && echo "${BRANCH_NAME//\/merge/}" || echo "")
 
