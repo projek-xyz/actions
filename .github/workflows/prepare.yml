@@ -151,7 +151,7 @@ jobs:
           if [[ $NEEDS_COMPOSER -eq 1 ]]; then PHP_TOOLS="$PHP_TOOLS,composer"; fi
           if [[ $NEEDS_WPCLI -eq 1 ]]; then PHP_TOOLS="$PHP_TOOLS,wp-cli"; fi
 
-          echo "needs-php=$([ -z "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
+          echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
           echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
 
       - name: Node Requirements
@@ -175,11 +175,14 @@ jobs:
           if [[ $NEEDS_BUN -eq 1 ]]; then PM_NAME=bun; fi
 
           if [[ $NEEDS_NODE -eq 1 ]]; then
-            pkg_namager=$(cat package.json | jq -r '.packageManager')
-            arr=(${pkg_namager//@/ })
+            pkg_namager=$(jq -r '.packageManager // ""' package.json)
 
-            PM_NAME=${arr[0]}
-            PM_VERSION=${arr[1]}
+            if [[ -n $pkg_manager ]]; then
+              arr=(${pkg_namager//@/ })
+
+              PM_NAME=${arr[0]}
+              PM_VERSION=${arr[1]}
+            fi
           fi
 
           echo "needs-node=$NEEDS_NODE" >> $GITHUB_OUTPUT
@@ -191,7 +194,7 @@ jobs:
       - name: Project
         id: project
         env:
-          HAS_NODE: ${{ steps.node.outputs.need-node }}
+          HAS_NODE: ${{ steps.node.outputs.needs-node }}
         run: |
           # Extract repository name and convert to lowercase
           REPO_NAME=$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]')
@@ -314,6 +317,8 @@ jobs:
                     name: artifact.name,
                   })
                 }
+
+                break;
               }
 
               core.setOutput('available', !!previous.sha ? 1 : 0);
