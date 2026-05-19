@@ -27,9 +27,53 @@ on:
         required: false
         type: string
     outputs:
-      # Composer
+      # Project
+      project-repo-name:
+        value: ${{ jobs.environments.outputs.project-repo-name }}
+      project-branch-name:
+        value: ${{ jobs.environments.outputs.project-branch-name }}
+      project-version:
+        value: ${{ jobs.environments.outputs.project-version }}
+      # PHP Project
+      needs-php:
+        value: ${{ jobs.environments.outputs.needs-php }}
+      needs-composer:
+        value: ${{ jobs.environments.outputs.needs-composer }}
+      needs-wpcli:
+        value: ${{ jobs.environments.outputs.needs-wpcli }}
+      is-laravel:
+        value: ${{ jobs.environments.outputs.is-laravel }}
       composer-cache-dir:
         value: ${{ jobs.environments.outputs.composer-cache-dir }}
+      wpcli-cache-dir:
+        value: ${{ jobs.environments.outputs.wpcli-cache-dir }}
+      # Node Project
+      needs-node:
+        value: ${{ jobs.environments.outputs.needs-node }}
+      needs-pnpm:
+        value: ${{ jobs.environments.outputs.needs-pnpm }}
+      needs-bun:
+        value: ${{ jobs.environments.outputs.needs-bun }}
+      node-pm-name:
+        value: ${{ jobs.environments.outputs.node-pm-name }}
+      node-pm-version:
+        value: ${{ jobs.environments.outputs.node-pm-version }}
+      # Test Reports
+      has-codecov:
+        value: ${{ jobs.environments.outputs.has-codecov }}
+      has-coveralls:
+        value: ${{ jobs.environments.outputs.has-coveralls }}
+      should-reports:
+        value: ${{ jobs.environments.outputs.should-reports }}
+      # Workflow
+      has-previous:
+        value: ${{ jobs.environments.outputs.has-previous }}
+      previous-run:
+        value: ${{ jobs.environments.outputs.previous-run }}
+      has-changed:
+        value: ${{ jobs.environments.outputs.has-changed }}
+      changed-run:
+        value: ${{ jobs.environments.outputs.changed-run }}
     secrets:
       CODECOV_TOKEN:
         required: false
@@ -58,7 +102,6 @@ jobs:
       project-repo-name: ${{ steps.project.outputs.repo-name }}
       project-branch-name: ${{ steps.project.outputs.branch-name }}
       project-version: ${{ steps.project.outputs.version }}
-      previous-run: ${{ steps.previous-run.outputs.result }}
       # PHP Project
       needs-php: ${{ steps.php.outputs.needs-php || '0' }}
       needs-composer: ${{ steps.php.outputs.needs-composer || '0' }}
@@ -76,6 +119,11 @@ jobs:
       has-codecov: ${{ steps.reports.outputs.has-codecov || '0' }}
       has-coveralls: ${{ steps.reports.outputs.has-coveralls || '0' }}
       should-reports: ${{ steps.reports.outputs.should-reports || '0' }}
+      # Workflow
+      has-previous: ${{ steps.previous-run.outputs.available || '0' }}
+      previous-run: ${{ steps.previous-run.outputs.result }}
+      has-changed: ${{ steps.changed-files.outputs.available || '0' }}
+      changed-run: ${{ steps.changed-files.outputs.result }}
 
     steps:
       - name: Checkout
