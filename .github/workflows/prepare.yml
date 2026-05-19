@@ -30,50 +30,67 @@ on:
       # Project
       project-repo-name:
         value: ${{ jobs.environments.outputs.project-repo-name }}
+        description: The lowe-case name of the project repository.
       project-branch-name:
         value: ${{ jobs.environments.outputs.project-branch-name }}
+        description: The name of the project branch.
       project-version:
         value: ${{ jobs.environments.outputs.project-version }}
+        description: The version of the project.
       # PHP Project
       needs-php:
         value: ${{ jobs.environments.outputs.needs-php }}
+        description: Whether the project needs PHP.
       needs-composer:
         value: ${{ jobs.environments.outputs.needs-composer }}
+        description: Whether the project needs Composer.
       needs-wpcli:
         value: ${{ jobs.environments.outputs.needs-wpcli }}
+        description: Whether the project needs WP-CLI.
       is-laravel:
         value: ${{ jobs.environments.outputs.is-laravel }}
+        description: Whether the project is a Laravel project.
       composer-cache-dir:
         value: ${{ jobs.environments.outputs.composer-cache-dir }}
+        description: The cache directory for Composer.
       wpcli-cache-dir:
         value: ${{ jobs.environments.outputs.wpcli-cache-dir }}
+        description: The cache directory for WP-CLI.
       # Node Project
       needs-node:
         value: ${{ jobs.environments.outputs.needs-node }}
       needs-pnpm:
         value: ${{ jobs.environments.outputs.needs-pnpm }}
+        description: Whether the project needs pnpm.
       needs-bun:
         value: ${{ jobs.environments.outputs.needs-bun }}
+        description: Whether the project needs Bun.
       node-pm-name:
         value: ${{ jobs.environments.outputs.node-pm-name }}
+        description: "The name of the Node.js package manager: npm, pnpm & bun."
       node-pm-version:
         value: ${{ jobs.environments.outputs.node-pm-version }}
+        description: The version of the Node.js package manager.
       # Test Reports
       has-codecov:
         value: ${{ jobs.environments.outputs.has-codecov }}
+        description: Whether the project has Codecov.
       has-coveralls:
         value: ${{ jobs.environments.outputs.has-coveralls }}
+        description: Whether the project has Coveralls.
       should-reports:
         value: ${{ jobs.environments.outputs.should-reports }}
+        description: Whether test coverage reports should be generated.
       # Workflow
       has-previous:
         value: ${{ jobs.environments.outputs.has-previous }}
+        description: Whether the workflow has a previous runs.
       previous-run:
         value: ${{ jobs.environments.outputs.previous-run }}
-      has-changed:
-        value: ${{ jobs.environments.outputs.has-changed }}
-      changed-run:
-        value: ${{ jobs.environments.outputs.changed-run }}
+        description: "The previous workflow run object: { sha, message, artifacts: {id, name}[] }."
+      changed-files:
+        value: ${{ jobs.environments.outputs.changed-files }}
+        description: List of changed files.
     secrets:
       CODECOV_TOKEN:
         required: false
@@ -123,8 +140,7 @@ jobs:
       # Workflow
       has-previous: ${{ steps.previous-run.outputs.available || '0' }}
       previous-run: ${{ steps.previous-run.outputs.result }}
-      has-changed: ${{ steps.changed-files.outputs.available || '0' }}
-      changed-run: ${{ steps.changed-files.outputs.result }}
+      changed-files: ${{ steps.changed-files.outputs.result }}
 
     steps:
       - name: Checkout
