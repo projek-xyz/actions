@@ -30,7 +30,7 @@ on:
       # Project
       project-repo-name:
         value: ${{ jobs.environments.outputs.project-repo-name }}
-        description: The lowe-case name of the project repository.
+        description: The lower-case name of the project repository.
       project-branch-name:
         value: ${{ jobs.environments.outputs.project-branch-name }}
         description: The name of the project branch.
@@ -110,6 +110,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check configs
+        id: check
+        run: |
+          if [ -f ".github/labeler.yml" ] || [ -f ".github/labeler.yaml" ]; then
+            echo "should-label=1" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Labeler
+        if: steps.check.outputs.should-label == '1'
+        uses: actions/labeler@v6
+        with:
+          dot: true
 
   environments:
     name: Environments
@@ -147,6 +163,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: PHP Requirements
         id: php
@@ -165,8 +182,8 @@ jobs:
           # Whether the repository is a laravel project
           echo "is-laravel=$(test -x ./artisan && echo 1 || echo 0)" >> $GITHUB_OUTPUT
 
-          if [[ $NEEDS_COMPOSER -eq 1 ]]; then PHP_TOOLS="$PHP_TOOLS,composer"; fi
-          if [[ $NEEDS_WPCLI -eq 1 ]]; then PHP_TOOLS="$PHP_TOOLS,wp-cli"; fi
+          if [[ $NEEDS_COMPOSER -eq 1 ]]; then PHP_TOOLS="${PHP_TOOLS:+$PHP_TOOLS,}composer"; fi
+          if [[ $NEEDS_WPCLI -eq 1 ]]; then PHP_TOOLS="${PHP_TOOLS:+$PHP_TOOLS,}wp-cli"; fi
 
           echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
           echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
@@ -194,7 +211,7 @@ jobs:
           if [[ $NEEDS_NODE -eq 1 ]]; then
             pkg_namager=$(jq -r '.packageManager // ""' package.json)
 
-            if [[ -n $pkg_manager ]]; then
+            if [[ -n $pkg_namager ]]; then
               arr=(${pkg_namager//@/ })
 
               PM_NAME=${arr[0]}
