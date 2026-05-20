@@ -3,26 +3,44 @@ name: Report
 on:
   workflow_call:
     secrets:
-      CC_TEST_REPORTER_ID:
+      COVERALLS_REPO_TOKEN:
         required: false
     inputs:
-      reports-artifact-pattern:
-        type: string
-        default: test-reports-*
       has-coveralls:
         type: boolean
         default: false
-      has-codeclimate:
-        type: boolean
-        default: false
-
-permissions:
-  contents: write
 
 jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      has-coveralls: ${{ steps.check-coveralls.outputs.has-coveralls }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check Coveralls secrets
+        if: inputs.has-coveralls == false
+        id: check-coveralls
+        env:
+          HAS_COVERALLS: ${{ inputs.has-coveralls && '1' || '0' }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: |
+          # Check existance of Coveralls secrets if not provided via input
+          if [ "$HAS_COVERALLS" = "0" ]; then
+            HAS_COVERALLS=$([ -n "$COVERALLS_REPO_TOKEN" ] && echo "1" || echo "0")
+          fi
+
+          echo "has-coveralls=$HAS_COVERALLS" >> $GITHUB_OUTPUT
+
   coveralls:
-    name: Coveralls
-    if: inputs.has-coveralls == true
+    name: Upload to Coveralls
+    if: needs.prepare.outputs.has-coveralls == '1'
+    needs: prepare
     runs-on: ubuntu-latest
 
     steps:
@@ -31,28 +49,3 @@ jobs:
         with:
           github-token: ${{ github.token }}
           parallel-finished: true
-
-  codeclimate:
-    name: CodeClimate
-    if: inputs.has-codeclimate == true
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download Reports
-        uses: actions/download-artifact@v8
-        with:
-          pattern: ${{ inputs.reports-artifact-pattern }}
-          merge-multiple: true
-
-      - name: CodeClimate Report
-        env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-          CC_TEST_REPORTER_URL: https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64
-        run: |
-          curl -LSs $CC_TEST_REPORTER_URL > ./cc-test-reporter && chmod +x ./cc-test-reporter
-          ./cc-test-reporter sum-coverage -o - codeclimate.*.json | ./cc-test-reporter upload-coverage --input -
-
-      - name: Prune artifacts
-        uses: geekyeggo/delete-artifact@v6
-        with:
-          name: ${{ inputs.reports-artifact-pattern }}
