@@ -24,7 +24,6 @@ jobs:
           persist-credentials: false
 
       - name: Check Coveralls secrets
-        if: inputs.has-coveralls == false
         id: check-coveralls
         env:
           HAS_COVERALLS: ${{ inputs.has-coveralls && '1' || '0' }}
