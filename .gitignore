@@ -2,18 +2,22 @@
 # --------------------------
 Thumbs.db
 Desktop.ini
-.directory
 .DS_Store
+.directory
 ._*
-*.cache
-*.crt
-*.log
+*.DS_Store
 *.old
-*.key
-*.pem
+*.log
 *.tmp
-*.zip
+
+# caches
+.cache
+*.cache
 *~
+
+# distribution
+dist
+*.zip
 
 # Development files
 # --------------------------
@@ -21,19 +25,36 @@ Desktop.ini
 .env
 .php-version
 .tool-versions
-coveralls-upload.json
-dist
 node_modules
 vendor
 
-# Node.js lock files
-.pnpm-store
+# Other package managers
+bun.lock
+bun.lockb
 package-lock.json
+pnpm-lock.yaml
 yarn.lock
+
+# AI Agents
+# --------------------------
+.agents
+.antigravitycli
+.gemini
+conductor
+GEMINI.md
+
+# IDE Project Configurations
+# --------------------------
+nbproject
+.idea
+.settings
+.vscode
+.project
+.zed
+*.sublime-*
 
 # But Keep these
 # --------------------------
 !.env.example
 !.env.*.example
-!.htaccess
 !.gitkeep
