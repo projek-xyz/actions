@@ -383,6 +383,7 @@ jobs:
           steps.previous-run.outputs.available == '1'
         id: changed-files
         uses: actions/github-script@v9
+        continue-on-error: true
         env:
           PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}
           CURRENT_SHA: ${{ github.sha }}
@@ -390,8 +391,8 @@ jobs:
           script: |
             const files = [];
 
-            const prev_sha = process.env.PREVIOUS_SHA.substring(0, 8);
-            const curr_sha = process.env.CURRENT_SHA.substring(0, 8);
+            const prev_sha = process.env.PREVIOUS_SHA;
+            const curr_sha = process.env.CURRENT_SHA;
 
             try {
               await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
@@ -399,6 +400,10 @@ jobs:
                   stdout: (data) => {
                     const changedFiles = data.toString().split('\n').map(f => f.trim())
                     files.push(...changedFiles.filter(file => file.length > 0));
+                  },
+                  stderr: (data) => {
+                    const message = data.toString().split('\n').join(' ');
+                    core.error(`Failed to get changed files: ${message}`);
                   }
                 }
               });
@@ -412,7 +417,6 @@ jobs:
 
               return files;
             } catch (error) {
-              core.notice(`Failed to get changed files: ${error.message}`);
               core.setOutput('available', 0);
 
               return files;
