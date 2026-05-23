@@ -318,20 +318,12 @@ jobs:
             }
 
             async function isValidSha(sha) {
-              let valid = false;
               try {
                 const exitCode = await exec.exec('git', ['cat-file', '-e', sha], {
                   ignoreReturnCode: true,
                   silent: true,
-                  listeners: {
-                    stdout: () => {
-                      valid = true;
-                    },
-                    stderr: () => {
-                      valid = false;
-                    }
-                  }
                 });
+
                 return exitCode === 0;
               } catch {
                 return false;
@@ -434,7 +426,9 @@ jobs:
             const curr_sha = process.env.CURRENT_SHA;
 
             try {
-              await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
+              const exitCode = await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
+                ignoreReturnCode: true,
+                silent: true,
                 listeners: {
                   stdout: (data) => {
                     const changedFiles = data.toString().split('\n').map(f => f.trim())
