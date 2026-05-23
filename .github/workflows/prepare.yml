@@ -417,32 +417,26 @@ jobs:
             const prev_sha = process.env.PREVIOUS_SHA;
             const curr_sha = process.env.CURRENT_SHA;
 
-            try {
-              const exitCode = await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
-                ignoreReturnCode: true,
-                silent: true,
-                listeners: {
-                  stdout: (data) => {
-                    const changedFiles = data.toString().split('\n').map(f => f.trim())
-                    files.push(...changedFiles.filter(file => file.length > 0));
-                  },
-                  stderr: (data) => {
-                    const message = data.toString().split('\n').join(' ');
-                    core.error(`Failed to get changed files: ${message}`);
-                  }
+            const exitCode = await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
+              ignoreReturnCode: true,
+              silent: true,
+              listeners: {
+                stdout: (data) => {
+                  const changedFiles = data.toString().split('\n').map(f => f.trim())
+                  files.push(...changedFiles.filter(file => file.length > 0));
+                },
+                stderr: (data) => {
+                  const message = data.toString().split('\n').join(' ');
+                  core.error(`Failed to get changed files: ${message}`);
                 }
-              });
-
-              for (const diff of files) {
-                core.info(`- \u001b[33m${diff}\u001b[0m`)
               }
+            });
 
-              core.notice(`Found \u001b[1m${files.length}\u001b[0m files changed`);
-              core.setOutput('available', files.length ? 1 : 0);
-
-              return files;
-            } catch (error) {
-              core.setOutput('available', 0);
-
-              return files;
+            for (const diff of files) {
+              core.info(`- \u001b[33m${diff}\u001b[0m`)
             }
+
+            core.notice(`Found \u001b[1m${files.length}\u001b[0m files changed from ${prev_sha} to ${curr_sha}`);
+            core.setOutput('available', files.length ? 1 : 0);
+
+            return files;
