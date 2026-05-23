@@ -313,6 +313,7 @@ jobs:
             const branch = process.env.CURRENT_BRANCH;
             const previous = {
               sha: null,
+              branch: null,
               message: null,
               artifacts: [],
             }
@@ -361,6 +362,7 @@ jobs:
                     continue;
                   }
 
+                  previous.branch = branch;
                   previous.sha = run.head_commit.id;
                   previous.message = run.head_commit.message;
 
