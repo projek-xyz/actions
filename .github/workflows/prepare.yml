@@ -317,19 +317,6 @@ jobs:
               artifacts: [],
             }
 
-            async function isValidSha(sha) {
-              try {
-                const exitCode = await exec.exec('git', ['cat-file', '-e', sha], {
-                  ignoreReturnCode: true,
-                  silent: true,
-                });
-
-                return exitCode === 0;
-              } catch {
-                return false;
-              }
-            }
-
             try {
               const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
               const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
@@ -364,9 +351,12 @@ jobs:
                 }
 
                 for (const run of workflow_runs) {
-                  const valid = await isValidSha(run.head_commit.id);
+                  const exitCode = await exec.exec('git', ['cat-file', '-e', run.head_commit.id], {
+                    ignoreReturnCode: true,
+                    silent: true,
+                  });
 
-                  if (! valid) {
+                  if (exitCode > 0) {
                     console.log(`invalid: ${run.head_commit.id}`)
                     continue;
                   }
