@@ -317,6 +317,27 @@ jobs:
               artifacts: [],
             }
 
+            async function isValidSha(sha) {
+              let valid = false;
+              try {
+                const exitCode = await exec.exec('git', ['cat-file', '-e', sha], {
+                  ignoreReturnCode: true,
+                  silent: true,
+                  listeners: {
+                    stdout: () => {
+                      valid = true;
+                    },
+                    stderr: () => {
+                      valid = false;
+                    }
+                  }
+                });
+                return exitCode === 0;
+              } catch {
+                return false;
+              }
+            }
+
             try {
               const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
               const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
@@ -332,12 +353,13 @@ jobs:
                 process.env.TARGET_BRANCH,
               ]
 
+              found:
+
               for (const branch of branches) {
                 const { data: { workflow_runs } } = await github.rest.actions.listWorkflowRuns({
                   workflow_id: workflow.id,
                   status: 'completed',
                   conclusion: 'success',
-                  per_page: 1,
                   branch,
                   owner,
                   repo,
@@ -349,28 +371,39 @@ jobs:
                   continue;
                 }
 
-                previous.sha = workflow_runs[0].head_commit.id;
-                previous.message = workflow_runs[0].head_commit.message;
+                for (const run of workflow_runs) {
+                  const valid = await isValidSha(run.head_commit.id);
 
-                core.info(`Found ${workflow_runs.length} previously successful run from '${branch}' branch`);
-                core.debug(`Previous success run on '${branch}' branch commit sha: ${previous.sha}`);
+                  if (! valid) {
+                    console.log(`invalid: ${run.head_commit.id}`)
+                    continue;
+                  }
 
-                const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
-                  run_id: workflow_runs[0].id,
-                  owner,
-                  repo,
-                });
+                  previous.sha = run.head_commit.id;
+                  previous.message = run.head_commit.message;
 
-                for (const artifact of artifacts) {
-                  previous.artifacts.push({
-                    id: artifact.id,
-                    name: artifact.name,
-                  })
+                  core.info(`Found ${workflow_runs.length} previously successful run from '${branch}' branch`);
+                  core.debug(`Previous success run on '${branch}' branch commit sha: ${previous.sha}`);
+
+                  const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+                    run_id: run.id,
+                    owner,
+                    repo,
+                  });
+
+                  for (const artifact of artifacts) {
+                    previous.artifacts.push({
+                      id: artifact.id,
+                      name: artifact.name,
+                    })
+                  }
+
+                  break found;
                 }
 
-                console.log(workflow_runs, artifacts)
-
-                break;
+                if (previous.sha) {
+                  break;
+                }
               }
 
               core.setOutput('available', !!previous.sha ? 1 : 0);
