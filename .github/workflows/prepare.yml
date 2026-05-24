@@ -188,7 +188,8 @@ jobs:
           # persist-credentials: false
           path: .github/scripts
           sparse-checkout: |
-            .github/scripts/*.js
+            .github/scripts/changed-files.js
+            .github/scripts/previous-run.js
 
       - name: PHP Requirements
         id: php
