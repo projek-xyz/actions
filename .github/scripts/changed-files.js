@@ -23,12 +23,14 @@
 const pmPatterns = {
   bun: ['bun.lock', 'bunfig.toml'],
   npm: ['package-lock.json'],
-  pnpm: ['pnpm-lock.y?aml'],
+  pnpm: ['pnpm-*.{yaml,yml}'],
 }
 
 /** @type {string[]} */
 const jsPatterns = [
-  '**/*.?(c|m)[jt]s?(x)',
+  '**/*.{cjs,js,jsx,mjs,mts,ts,tsx}',
+  '{jsconfig,tsconfig}.json',
+  'biome.*',
   'package.json',
 ];
 
@@ -36,44 +38,44 @@ const jsPatterns = [
 const phpPatterns = [
   '**/*.php',
   'composer.*',
-  'phpunit.xml',
+  'phpcs.*',
+  'phpstan.*',
+  'phpunit.*',
+  'pint.json',
 ];
 
 /**
- * @param {import('minimatch')} minimatch
  * @param {import('@actions/github-script').AsyncFunctionArguments} p2
  */
-export function changedFiles(minimatch, { context, core, exec }) {
+export function changedFiles({ context, core, exec, glob }) {
   /** @type {string[]} */
   const files = [];
 
   /**
    * @param {string[]} files
    * @param {AssesmentOpt} p0
-   * @returns {Assesment}
+   * @returns {Promise<Assesment>}
    */
-  function getAssesment(files, { isPhp, isNode, nodePM }) {
+  async function getAssesment(files, { isPhp, isNode, nodePM }) {
     const assesment = { build: false, deploy: false, tests: false, report: '' };
 
+    /** @type {string[]} */
+    const patterns = []
+
     if (isPhp) {
-      for (const phpPatt of phpPatterns) {
-        if (files.some(minimatch.filter(phpPatt))) {
-          assesment.tests = true;
-          break;
-        }
-      }
+      patterns.push(...phpPatterns)
     }
 
     if (isNode) {
       jsPatterns.push(...pmPatterns[nodePM])
-
-      for (const jsPatt of jsPatterns) {
-        if (files.some(minimatch.filter(jsPatt))) {
-          assesment.tests = true;
-          break;
-        }
-      }
+      patterns.push(...jsPatterns)
     }
+
+    const globber = await glob.create(patterns.join('\n'))
+    const possibleMatches = await globber.glob()
+
+    console.log({ files })
+    console.log({ possibleMatches })
 
     const reports = []
 

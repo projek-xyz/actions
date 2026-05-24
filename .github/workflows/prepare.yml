@@ -364,9 +364,8 @@ jobs:
         with:
           script: |
             const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.js');
-            const minimatch = require('minimatch');
 
-            return await changedFiles(minimatch, { context, core, exec })(
+            return await changedFiles({ context, core, exec, glob })(
               process.env.CURRENT_SHA,
               process.env.PREVIOUS_SHA,
               {
