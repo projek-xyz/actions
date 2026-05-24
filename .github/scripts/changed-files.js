@@ -60,7 +60,9 @@ export function changedFiles({ context, core, exec, glob }) {
     const assesment = { build: false, deploy: false, tests: false, report: '' };
 
     /** @type {string[]} */
-    const patterns = []
+    const patterns = [
+      '.github/{actions,workflows}'
+    ]
 
     if (isPhp) {
       patterns.push(...phpPatterns)
@@ -72,10 +74,14 @@ export function changedFiles({ context, core, exec, glob }) {
     }
 
     const globber = await glob.create(patterns.join('\n'))
-    const possibleMatches = await globber.glob()
 
-    console.log({ files })
-    console.log({ possibleMatches })
+    for await (const file of globber.globGenerator()) {
+      if (files.find(path => file.endsWith(path))) {
+        assesment.build = true;
+        assesment.tests = true;
+        break;
+      }
+    }
 
     const reports = []
 
@@ -119,7 +125,7 @@ export function changedFiles({ context, core, exec, glob }) {
     /** @type {Assesment} */
     const assesment = context.eventName === 'workflow_dispatch'
       ? { build: true, deploy: true, tests: true, report: 'Runs from `workflow_dispatch`' }
-      : getAssesment(files, opt)
+      : (await getAssesment(files, opt))
 
     core.notice(`Assesment: ${assesment.report}`);
 
