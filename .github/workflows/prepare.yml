@@ -186,7 +186,7 @@ jobs:
           fetch-depth: 1
           repository: projek-xyz/actions
           persist-credentials: false
-          # path: .github/scripts
+          path: .github/scripts
           sparse-checkout: |
             .github/scripts/*.js
 
