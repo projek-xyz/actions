@@ -61,7 +61,7 @@ export function changedFiles({ context, core, exec, glob }) {
 
     /** @type {string[]} */
     const patterns = [
-      '.github/{actions,workflows}'
+      '.github/{actions,workflows}/*.{yaml,yml}'
     ]
 
     if (isPhp) {
@@ -74,8 +74,10 @@ export function changedFiles({ context, core, exec, glob }) {
     }
 
     const globber = await glob.create(patterns.join('\n'))
+    const matches = []
 
     for await (const file of globber.globGenerator()) {
+      matches.push(file)
       if (files.find(path => file.endsWith(path))) {
         assesment.build = true;
         assesment.tests = true;
@@ -83,10 +85,13 @@ export function changedFiles({ context, core, exec, glob }) {
       }
     }
 
-    const reports = []
+    console.log({ files, matches })
+    const reports = [];
 
     for (const [key, val] of Object.entries(assesment)) {
-      reports.push(`${key}: \u001b[1m${val}\u001b[0m`)
+      if (key === 'report') continue;
+      const color = val ? '35' : '36'
+      reports.push(`\u001b[1m${key}\u001b[0m: \u001b[${color}m${val}\u001b[0m`);
     }
 
     assesment.report = reports.join(', ')
@@ -116,11 +121,18 @@ export function changedFiles({ context, core, exec, glob }) {
       }
     });
 
+    current = current.slice(0, 8)
+    previous = previous.slice(0, 8)
+
+    const notices = [
+      `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m`
+    ]
+
     for (const diff of files) {
-      core.info(`- \u001b[33m${diff}\u001b[0m`)
+      notices.push(`- \u001b[34m${diff}\u001b[0m`)
     }
 
-    core.notice(`Found \u001b[1m${files.length}\u001b[0m files changed from ${current} to ${previous}`);
+    core.notice(notices.join('\n'));
 
     /** @type {Assesment} */
     const assesment = context.eventName === 'workflow_dispatch'
