@@ -141,8 +141,8 @@ jobs:
       needs-composer: ${{ steps.php.outputs.needs-composer || '0' }}
       needs-wpcli: ${{ steps.php.outputs.needs-wpcli || '0' }}
       is-laravel: ${{ steps.php.outputs.is-laravel || '0' }}
-      composer-cache-dir: ${{ steps.php-caches.outputs.composer-dir }}
-      wpcli-cache-dir: ${{ steps.php-caches.outputs.wpcli-dir }}
+      composer-cache-dir: ${{ steps.cache-dirs.outputs.composer-dir }}
+      wpcli-cache-dir: ${{ steps.cache-dirs.outputs.wpcli-dir }}
       # Node Project
       node-pm-name: ${{ steps.node.outputs.pm-name }}
       node-pm-version: ${{ steps.node.outputs.pm-version }}
@@ -266,9 +266,9 @@ jobs:
           tools: ${{ steps.php.outputs.php-tools }}
           coverage: none
 
-      - name: PHP Caches
+      - name: Cache dirs
         if: steps.php.outputs.needs-php == '1'
-        id: php-caches
+        id: cache-dirs
         env:
           NEEDS_COMPOSER: ${{ steps.php.outputs.needs-composer }}
           NEEDS_WPCLI: ${{ steps.php.outputs.needs-wpcli }}
