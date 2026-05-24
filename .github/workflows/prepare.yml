@@ -187,7 +187,7 @@ jobs:
           repository: projek-xyz/actions
           ref: prepare/buildable-testable-deployable
           # persist-credentials: false
-          path: .github/actions
+          path: .github/xyz-actions
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             .github/scripts/changed-files.js
@@ -215,8 +215,6 @@ jobs:
 
           echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
           echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
-
-          tree --dirsfirst -Fa .github
 
       - name: Node Requirements
         id: node
@@ -287,6 +285,10 @@ jobs:
           echo "branch-slug=$BRANCH_SLUG" >> $GITHUB_OUTPUT
           echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "base-branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
+
+          # Prepare for `previous-run` and `changed-files` step
+          cp .github/xyz-actions/.github/scripts .github/
+          tree --dirsfirst -aFL 2 .github
 
       - name: Setup PHP
         if: steps.php.outputs.needs-php == '1'
