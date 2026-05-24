@@ -42,12 +42,13 @@ const phpPatterns = [
   'phpstan.*',
   'phpunit.*',
   'pint.json',
+  'wp-cli.yml',
 ];
 
 /**
  * @param {import('@actions/github-script').AsyncFunctionArguments} p2
  */
-export function changedFiles({ context, core, exec, glob }) {
+export function changedFiles({ context, core, exec, github, glob }) {
   /** @type {string[]} */
   const files = [];
 
@@ -58,11 +59,13 @@ export function changedFiles({ context, core, exec, glob }) {
    */
   async function getAssesment(files, { isPhp, isNode, nodePM }) {
     const assesment = { build: false, deploy: false, tests: false, report: '' };
+    const matches = [];
 
     /** @type {string[]} */
     const patterns = [
-      '.github/{actions,workflows}/*.{yaml,yml}'
-    ]
+      '.github/**/*.{yaml,yml}',
+      '**/*.sh',
+    ];
 
     if (isPhp) {
       patterns.push(...phpPatterns)
@@ -74,7 +77,6 @@ export function changedFiles({ context, core, exec, glob }) {
     }
 
     const globber = await glob.create(patterns.join('\n'))
-    const matches = []
 
     for await (const file of globber.globGenerator()) {
       matches.push(file)
@@ -85,7 +87,6 @@ export function changedFiles({ context, core, exec, glob }) {
       }
     }
 
-    console.log({ files, matches })
     const reports = [];
 
     for (const [key, val] of Object.entries(assesment)) {
@@ -95,10 +96,10 @@ export function changedFiles({ context, core, exec, glob }) {
     }
 
     assesment.report = reports.join(', ')
+    console.log({ files, matches })
 
     return assesment
   }
-
 
   /**
    * @param {string} current
