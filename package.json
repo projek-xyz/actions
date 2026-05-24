@@ -9,6 +9,7 @@
     "url": "git+https://github.com/projek-xyz/actions.git"
   },
   "devDependencies": {
-    "@actions/github-script": "github:actions/github-script"
+    "@actions/github-script": "github:actions/github-script",
+    "@types/minimatch": "^5.1.2"
   }
 }

@@ -88,9 +88,19 @@ on:
       previous-run:
         value: ${{ jobs.environments.outputs.previous-run }}
         description: "The previous workflow run object: { sha, message, artifacts: {id, name}[] }."
+      # Code base
       changed-files:
         value: ${{ jobs.environments.outputs.changed-files }}
         description: List of changed files.
+      should-build:
+        value: ${{ jobs.environments.outputs.should-build }}
+        description: Whether should run the build.
+      should-deploy:
+        value: ${{ jobs.environments.outputs.should-deploy }}
+        description: Whether should run the deployment.
+      should-tests:
+        value: ${{ jobs.environments.outputs.should-tests }}
+        description: Whether should run the tests.
     secrets:
       CODECOV_TOKEN:
         required: false
@@ -156,7 +166,12 @@ jobs:
       # Workflow
       has-previous: ${{ steps.previous-run.outputs.available || '0' }}
       previous-run: ${{ steps.previous-run.outputs.result }}
+      # Code base
+      has-changes: ${{ steps.changed-files.outputs.available || '0' }}
       changed-files: ${{ steps.changed-files.outputs.result }}
+      should-build: ${{ steps.changed-files.outputs.should-build || '0' }}
+      should-deploy: ${{ steps.changed-files.outputs.should-deploy || '0' }}
+      should-tests: ${{ steps.changed-files.outputs.should-tests || '0' }}
 
     steps:
       - name: Checkout
@@ -326,11 +341,20 @@ jobs:
         env:
           PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}
           CURRENT_SHA: ${{ github.sha }}
+          NEEDS_PHP: ${{ steps.php.outputs.needs-php }}
+          NEEDS_NODE: ${{ steps.node.outputs.needs-node }}
+          NODE_PM_NAME: ${{ steps.node.outputs.pm-name }}
         with:
           script: |
             const { changedFiles } = await import('${{github.workspace}}/scripts/changed-files.js');
+            const minimatch = require('minimatch');
 
-            return await changedFiles({ core, exec })(
+            return await changedFiles(minimatch, { context, core, exec })(
               process.env.CURRENT_SHA,
               process.env.PREVIOUS_SHA,
+              {
+                isPhp: process.env.NEEDS_PHP === '1',
+                isNode: process.env.NEEDS_NODE === '1',
+                nodePM: process.env.NODE_PM_NAME === '1',
+              }
             );
