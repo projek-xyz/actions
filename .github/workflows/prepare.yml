@@ -174,11 +174,21 @@ jobs:
       should-tests: ${{ steps.changed-files.outputs.should-tests || '0' }}
 
     steps:
-      - name: Checkout
+      - name: Checkout head repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Checkout actions repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          repository: projek-xyz/actions
+          persist-credentials: false
+          # path: .github/scripts
+          sparse-checkout: |
+            .github/scripts/*.js
 
       - name: PHP Requirements
         id: php
@@ -202,6 +212,9 @@ jobs:
 
           echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
           echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
+
+          ls -lah .
+          tree --dirsfirst -F .github
 
       - name: Node Requirements
         id: node
@@ -324,7 +337,7 @@ jobs:
           TARGET_BRANCH: ${{ steps.project.outputs.base-branch }}
         with:
           script: |
-            const { previousRun } = await import('${{github.workspace}}/scripts/previous-run.js');
+            const { previousRun } = await import('${{github.workspace}}/.github/scripts/previous-run.js');
 
             return await previousRun({ context, core, exec, github })([
               process.env.CURRENT_BRANCH,
@@ -346,7 +359,7 @@ jobs:
           NODE_PM_NAME: ${{ steps.node.outputs.pm-name }}
         with:
           script: |
-            const { changedFiles } = await import('${{github.workspace}}/scripts/changed-files.js');
+            const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.js');
             const minimatch = require('minimatch');
 
             return await changedFiles(minimatch, { context, core, exec })(
@@ -355,6 +368,6 @@ jobs:
               {
                 isPhp: process.env.NEEDS_PHP === '1',
                 isNode: process.env.NEEDS_NODE === '1',
-                nodePM: process.env.NODE_PM_NAME === '1',
+                nodePM: process.env.NODE_PM_NAME,
               }
             );
