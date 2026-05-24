@@ -96,7 +96,7 @@ export function changedFiles({ context, core, exec, github, glob }) {
     }
 
     assesment.report = reports.join(', ')
-    console.log({ files, matches })
+    core.debug(JSON.stringify({ files, matches }))
 
     return assesment
   }
@@ -126,21 +126,21 @@ export function changedFiles({ context, core, exec, github, glob }) {
     previous = previous.slice(0, 8)
 
     const notices = [
-      `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m`
+      `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m.`
     ]
-
-    for (const diff of files) {
-      notices.push(`- \u001b[34m${diff}\u001b[0m`)
-    }
-
-    core.notice(notices.join('\n'));
 
     /** @type {Assesment} */
     const assesment = context.eventName === 'workflow_dispatch'
       ? { build: true, deploy: true, tests: true, report: 'Runs from `workflow_dispatch`' }
       : (await getAssesment(files, opt))
 
-    core.notice(`Assesment: ${assesment.report}`);
+    notices.push(`Assesment: ${assesment.report}`)
+
+    core.notice(notices.join('\n'));
+
+    for (const diff of files) {
+      core.info(`- \u001b[34m${diff}\u001b[0m`)
+    }
 
     core.setOutput('should-build', assesment.build ? 1 : 0);
     core.setOutput('should-deploy', assesment.deploy ? 1 : 0);
