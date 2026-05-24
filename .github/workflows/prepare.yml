@@ -178,20 +178,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          # persist-credentials: false
+          persist-credentials: false
 
       - name: Checkout actions repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
           repository: projek-xyz/actions
-          ref: prepare/buildable-testable-deployable
-          # persist-credentials: false
+          persist-credentials: false
           path: .github/xyz-actions
           sparse-checkout-cone-mode: false
           sparse-checkout: |
-            .github/scripts/changed-files.js
-            .github/scripts/previous-run.js
+            .github/scripts
 
       - name: PHP Requirements
         id: php
@@ -288,7 +286,6 @@ jobs:
 
           # Prepare for `previous-run` and `changed-files` step
           cp -r .github/xyz-actions/.github/scripts .github/
-          tree --dirsfirst -aFL 2 .github
 
       - name: Setup PHP
         if: steps.php.outputs.needs-php == '1'
