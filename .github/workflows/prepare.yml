@@ -88,9 +88,19 @@ on:
       previous-run:
         value: ${{ jobs.environments.outputs.previous-run }}
         description: "The previous workflow run object: { sha, message, artifacts: {id, name}[] }."
+      # Code base
       changed-files:
         value: ${{ jobs.environments.outputs.changed-files }}
         description: List of changed files.
+      should-build:
+        value: ${{ jobs.environments.outputs.should-build }}
+        description: Whether should run the build.
+      should-deploy:
+        value: ${{ jobs.environments.outputs.should-deploy }}
+        description: Whether should run the deployment.
+      should-tests:
+        value: ${{ jobs.environments.outputs.should-tests }}
+        description: Whether should run the tests.
     secrets:
       CODECOV_TOKEN:
         required: false
@@ -156,14 +166,30 @@ jobs:
       # Workflow
       has-previous: ${{ steps.previous-run.outputs.available || '0' }}
       previous-run: ${{ steps.previous-run.outputs.result }}
+      # Code base
+      has-changes: ${{ steps.changed-files.outputs.available || '0' }}
       changed-files: ${{ steps.changed-files.outputs.result }}
+      should-build: ${{ steps.changed-files.outputs.should-build || '0' }}
+      should-deploy: ${{ steps.changed-files.outputs.should-deploy || '0' }}
+      should-tests: ${{ steps.changed-files.outputs.should-tests || '0' }}
 
     steps:
-      - name: Checkout
+      - name: Checkout head repo
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Checkout actions repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          repository: projek-xyz/actions
+          persist-credentials: false
+          path: .github/xyz-actions
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/scripts
 
       - name: PHP Requirements
         id: php
@@ -258,6 +284,9 @@ jobs:
           echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "base-branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
 
+          # Prepare for `previous-run` and `changed-files` step
+          cp -r .github/xyz-actions/.github/scripts .github/
+
       - name: Setup PHP
         if: steps.php.outputs.needs-php == '1'
         uses: shivammathur/setup-php@v2
@@ -309,96 +338,12 @@ jobs:
           TARGET_BRANCH: ${{ steps.project.outputs.base-branch }}
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const branch = process.env.CURRENT_BRANCH;
-            const previous = {
-              sha: null,
-              branch: null,
-              message: null,
-              artifacts: [],
-            }
+            const { previousRun } = await import('${{github.workspace}}/.github/scripts/previous-run.js');
 
-            try {
-              const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
-              const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
-
-              if (!workflow) {
-                core.setOutput('available', 0);
-
-                return previous;
-              }
-
-              const branches = [
-                process.env.CURRENT_BRANCH,
-                process.env.TARGET_BRANCH,
-              ]
-
-              found:
-
-              for (const branch of branches) {
-                const { data: { workflow_runs } } = await github.rest.actions.listWorkflowRuns({
-                  workflow_id: workflow.id,
-                  status: 'completed',
-                  conclusion: 'success',
-                  branch,
-                  owner,
-                  repo,
-                });
-
-                if (workflow_runs.length === 0) {
-                  core.info(`No previously successful run found from '${branch}' branch`);
-
-                  continue;
-                }
-
-                for (const run of workflow_runs) {
-                  const exitCode = await exec.exec('git', ['cat-file', '-e', run.head_commit.id], {
-                    ignoreReturnCode: true,
-                    silent: true,
-                  });
-
-                  if (exitCode > 0) {
-                    console.log(`invalid: ${run.head_commit.id}`)
-                    continue;
-                  }
-
-                  previous.branch = branch;
-                  previous.sha = run.head_commit.id;
-                  previous.message = run.head_commit.message;
-
-                  core.info(`Found ${workflow_runs.length} previously successful run from '${branch}' branch`);
-                  core.debug(`Previous success run on '${branch}' branch commit sha: ${previous.sha}`);
-
-                  const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
-                    run_id: run.id,
-                    owner,
-                    repo,
-                  });
-
-                  for (const artifact of artifacts) {
-                    previous.artifacts.push({
-                      id: artifact.id,
-                      name: artifact.name,
-                    })
-                  }
-
-                  break found;
-                }
-
-                if (previous.sha) {
-                  break;
-                }
-              }
-
-              core.setOutput('available', !!previous.sha ? 1 : 0);
-
-              return previous
-            } catch (error) {
-              core.notice(`Failed to get previous run: ${error.message}`);
-              core.setOutput('available', 0);
-
-              return previous;
-            }
+            return await previousRun({ context, core, exec, github })([
+              process.env.CURRENT_BRANCH,
+              process.env.TARGET_BRANCH,
+            ]);
 
       - name: Get changed files
         if: |-
@@ -410,33 +355,19 @@ jobs:
         env:
           PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}
           CURRENT_SHA: ${{ github.sha }}
+          NEEDS_PHP: ${{ steps.php.outputs.needs-php }}
+          NEEDS_NODE: ${{ steps.node.outputs.needs-node }}
+          NODE_PM_NAME: ${{ steps.node.outputs.pm-name }}
         with:
           script: |
-            const files = [];
+            const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.js');
 
-            const prev_sha = process.env.PREVIOUS_SHA;
-            const curr_sha = process.env.CURRENT_SHA;
-
-            const exitCode = await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
-              ignoreReturnCode: true,
-              silent: true,
-              listeners: {
-                stdout: (data) => {
-                  const changedFiles = data.toString().split('\n').map(f => f.trim())
-                  files.push(...changedFiles.filter(file => file.length > 0));
-                },
-                stderr: (data) => {
-                  const message = data.toString().split('\n').join(' ');
-                  core.error(`Failed to get changed files: ${message}`);
-                }
+            return await changedFiles({ context, core, exec, glob })(
+              process.env.CURRENT_SHA,
+              process.env.PREVIOUS_SHA,
+              {
+                isPhp: process.env.NEEDS_PHP === '1',
+                isNode: process.env.NEEDS_NODE === '1',
+                nodePM: process.env.NODE_PM_NAME,
               }
-            });
-
-            for (const diff of files) {
-              core.info(`- \u001b[33m${diff}\u001b[0m`)
-            }
-
-            core.notice(`Found \u001b[1m${files.length}\u001b[0m files changed from ${prev_sha} to ${curr_sha}`);
-            core.setOutput('available', files.length ? 1 : 0);
-
-            return files;
+            );
