@@ -214,8 +214,7 @@ jobs:
           echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
           echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
 
-          ls -lah .
-          tree --dirsfirst -F .github
+          tree --dirsfirst -Fa .github
 
       - name: Node Requirements
         id: node
