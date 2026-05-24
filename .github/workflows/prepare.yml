@@ -309,96 +309,12 @@ jobs:
           TARGET_BRANCH: ${{ steps.project.outputs.base-branch }}
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const branch = process.env.CURRENT_BRANCH;
-            const previous = {
-              sha: null,
-              branch: null,
-              message: null,
-              artifacts: [],
-            }
+            const { previousRun } = await import('${{github.workspace}}/scripts/previous-run.js');
 
-            try {
-              const { data: { workflows } } = await github.rest.actions.listRepoWorkflows({ owner, repo });
-              const workflow = workflows.find(w => w.name === process.env.GITHUB_WORKFLOW);
-
-              if (!workflow) {
-                core.setOutput('available', 0);
-
-                return previous;
-              }
-
-              const branches = [
-                process.env.CURRENT_BRANCH,
-                process.env.TARGET_BRANCH,
-              ]
-
-              found:
-
-              for (const branch of branches) {
-                const { data: { workflow_runs } } = await github.rest.actions.listWorkflowRuns({
-                  workflow_id: workflow.id,
-                  status: 'completed',
-                  conclusion: 'success',
-                  branch,
-                  owner,
-                  repo,
-                });
-
-                if (workflow_runs.length === 0) {
-                  core.info(`No previously successful run found from '${branch}' branch`);
-
-                  continue;
-                }
-
-                for (const run of workflow_runs) {
-                  const exitCode = await exec.exec('git', ['cat-file', '-e', run.head_commit.id], {
-                    ignoreReturnCode: true,
-                    silent: true,
-                  });
-
-                  if (exitCode > 0) {
-                    console.log(`invalid: ${run.head_commit.id}`)
-                    continue;
-                  }
-
-                  previous.branch = branch;
-                  previous.sha = run.head_commit.id;
-                  previous.message = run.head_commit.message;
-
-                  core.info(`Found ${workflow_runs.length} previously successful run from '${branch}' branch`);
-                  core.debug(`Previous success run on '${branch}' branch commit sha: ${previous.sha}`);
-
-                  const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
-                    run_id: run.id,
-                    owner,
-                    repo,
-                  });
-
-                  for (const artifact of artifacts) {
-                    previous.artifacts.push({
-                      id: artifact.id,
-                      name: artifact.name,
-                    })
-                  }
-
-                  break found;
-                }
-
-                if (previous.sha) {
-                  break;
-                }
-              }
-
-              core.setOutput('available', !!previous.sha ? 1 : 0);
-
-              return previous
-            } catch (error) {
-              core.notice(`Failed to get previous run: ${error.message}`);
-              core.setOutput('available', 0);
-
-              return previous;
-            }
+            return await previousRun({ context, core, exec, github })([
+              process.env.CURRENT_BRANCH,
+              process.env.TARGET_BRANCH,
+            ]);
 
       - name: Get changed files
         if: |-
@@ -412,31 +328,9 @@ jobs:
           CURRENT_SHA: ${{ github.sha }}
         with:
           script: |
-            const files = [];
+            const { changedFiles } = await import('${{github.workspace}}/scripts/changed-files.js');
 
-            const prev_sha = process.env.PREVIOUS_SHA;
-            const curr_sha = process.env.CURRENT_SHA;
-
-            const exitCode = await exec.exec('git', ['diff', '--name-only', prev_sha, curr_sha], {
-              ignoreReturnCode: true,
-              silent: true,
-              listeners: {
-                stdout: (data) => {
-                  const changedFiles = data.toString().split('\n').map(f => f.trim())
-                  files.push(...changedFiles.filter(file => file.length > 0));
-                },
-                stderr: (data) => {
-                  const message = data.toString().split('\n').join(' ');
-                  core.error(`Failed to get changed files: ${message}`);
-                }
-              }
-            });
-
-            for (const diff of files) {
-              core.info(`- \u001b[33m${diff}\u001b[0m`)
-            }
-
-            core.notice(`Found \u001b[1m${files.length}\u001b[0m files changed from ${prev_sha} to ${curr_sha}`);
-            core.setOutput('available', files.length ? 1 : 0);
-
-            return files;
+            return await changedFiles({ core, exec })(
+              process.env.CURRENT_SHA,
+              process.env.PREVIOUS_SHA,
+            );

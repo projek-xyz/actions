@@ -1,0 +1,14 @@
+{
+  "name": "@projek-xyz/actions",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/projek-xyz/actions.git"
+  },
+  "devDependencies": {
+    "@actions/github-script": "github:actions/github-script"
+  }
+}
