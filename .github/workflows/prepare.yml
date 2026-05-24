@@ -185,6 +185,7 @@ jobs:
         with:
           fetch-depth: 1
           repository: projek-xyz/actions
+          ref: prepare/buildable-testable-deployable
           # persist-credentials: false
           path: .github/scripts
           sparse-checkout: |
