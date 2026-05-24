@@ -287,7 +287,7 @@ jobs:
           echo "base-branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
 
           # Prepare for `previous-run` and `changed-files` step
-          cp .github/xyz-actions/.github/scripts .github/
+          cp -r .github/xyz-actions/.github/scripts .github/
           tree --dirsfirst -aFL 2 .github
 
       - name: Setup PHP
