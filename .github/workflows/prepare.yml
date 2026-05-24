@@ -187,7 +187,8 @@ jobs:
           repository: projek-xyz/actions
           ref: prepare/buildable-testable-deployable
           # persist-credentials: false
-          path: .github/scripts
+          path: .github/actions
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             .github/scripts/changed-files.js
             .github/scripts/previous-run.js
