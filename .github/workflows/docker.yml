@@ -29,6 +29,10 @@ on:
         description: Docker image tag
         required: true
         type: string
+      image-slug:
+        description: Docker image slug
+        required: false
+        type: string
       ref:
         description: The branch, tag or SHA that will be passed to `ref` input in `actions/checkout`
         required: false
@@ -95,6 +99,7 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ inputs.image-tag }}
+            type=raw,value=${{ inputs.image-slug }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
