@@ -32,11 +32,20 @@ on:
         value: ${{ jobs.environments.outputs.project-repo-name }}
         description: The lower-case name of the project repository.
       project-branch-name:
-        value: ${{ jobs.environments.outputs.project-branch-name }}
-        description: The name of the project branch.
+        value: ${{ jobs.environments.outputs.branch-name }}
+        description: Deprecated! use `branch-name` instead.
       project-version:
         value: ${{ jobs.environments.outputs.project-version }}
         description: The version of the project.
+      branch-name:
+        value: ${{ jobs.environments.outputs.branch-name }}
+        description: The name of the project branch.
+      branch-slug:
+        value: ${{ jobs.environments.outputs.branch-slug }}
+        description: The slug of the project branch.
+      pr-number:
+        value: ${{ jobs.environments.outputs.pr-number }}
+        description: The PR number, if any.
       # PHP Project
       needs-php:
         value: ${{ jobs.environments.outputs.needs-php }}
@@ -143,8 +152,9 @@ jobs:
     outputs:
       # Project
       project-repo-name: ${{ steps.project.outputs.repo-name }}
-      project-branch-name: ${{ steps.project.outputs.branch-name }}
       project-version: ${{ steps.project.outputs.version }}
+      branch-name: ${{ steps.project.outputs.branch-name }}
+      branch-slug: ${{ steps.project.outputs.branch-slug }}
       pr-number: ${{ steps.project.outputs.pr-number }}
       # PHP Project
       needs-php: ${{ steps.php.outputs.needs-php || '0' }}
