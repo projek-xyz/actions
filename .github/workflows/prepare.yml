@@ -290,7 +290,7 @@ jobs:
           fi
 
           if [[ $GITHUB_REF =~ "refs/tags/" ]]; then
-            APP_VERSION=${GITHUB_REF//refs\/tags/}
+            APP_VERSION=${GITHUB_REF#refs/tags/}
           fi
 
           echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
