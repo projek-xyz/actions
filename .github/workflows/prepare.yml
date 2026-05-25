@@ -268,15 +268,22 @@ jobs:
           BRANCH_SLUG=${BRANCH_SLUG:0:20}.${GITHUB_SHA:0:8}
 
           PR_NUMBER=$([[ $BRANCH_NAME =~ "/merge" ]] && echo "${BRANCH_NAME//\/merge/}" || echo "")
+          APP_VERSION=$BRANCH_SLUG
+
+          if [[ $HAS_NODE -eq ]]; then
+            APP_VERSION="$(jq -r '.version' package.json)-${APP_VERSION}"
+          fi
 
           if [[ -n $PR_NUMBER ]]; then
             BASE_BRANCH=$GITHUB_BASE_REF
+            APP_VERSION="pr${PR_NUMBER}-${APP_VERSION}"
           fi
 
-          if [[ $HAS_NODE -eq 1 ]]; then
-            # Extract version number from `package.json` file
-            echo "version=$(jq -r '.version' package.json)" >> $GITHUB_OUTPUT
+          if [[ $GITHUB_REF =~ "refs/tags/" ]]; then
+            APP_VERSION=${GITHUB_REF//refs\/tags/}
           fi
+
+          echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
 
           echo "repo-name=$REPO_NAME" >> $GITHUB_OUTPUT
           echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
