@@ -52,7 +52,6 @@ on:
       password:
         description: "Registry credential password that will be passed to `docker/login-action`, default: `github.token`"
         required: false
-        default: ${{ github.token }}
         type: string
 
 jobs:
@@ -82,7 +81,7 @@ jobs:
         with:
           registry: ${{ inputs.registry }}
           username: ${{ inputs.username }}
-          password: ${{ inputs.password }}
+          password: ${{ inputs.password || github.token }}
 
       - name: Docker meta
         id: meta
