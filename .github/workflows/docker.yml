@@ -11,6 +11,11 @@ on:
         description: Docker build args that will be passed to `build-args` input in `docker/build-push-action`
         required: false
         type: string
+      context:
+        description: Docker path-context that will be passed to `context` input in `docker/build-push-action`
+        required: false
+        type: string
+        default: .
       docker-file:
         description: Docker file path
         required: true
@@ -102,7 +107,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           build-args: ${{ inputs.build-args }}
-          context: .
+          context: ${{ inputs.context }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           file: ${{ inputs.docker-file }}
