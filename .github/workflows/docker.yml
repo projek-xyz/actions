@@ -57,11 +57,17 @@ on:
         description: "Registry credential password that will be passed to `docker/login-action`, default: `github.token`"
         required: false
         type: string
+    outputs:
+      image-url:
+        description: The image URL
+        value: ${{ jobs.build-and-push.outputs.image-url }}
 
 jobs:
   build-and-push:
     name: Build and Push
     runs-on: ubuntu-latest
+    outputs:
+      image-url: ${{ inputs.registry }}/${{ steps.image-name.outputs.lowercase }}:${{ inputs.image-slug }}
 
     steps:
       - name: Checkout code
