@@ -42,7 +42,7 @@ on:
       username:
         description: "Registry credential username that will be passed to `docker/login-action`, default: `github.actor`"
         required: false
-        default: ${{ github.action }}
+        default: ${{ github.actor }}
         type: string
       password:
         description: "Registry credential password that will be passed to `docker/login-action`, default: `github.token`"
