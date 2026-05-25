@@ -6,3 +6,10 @@ updates:
     schedule:
       interval: weekly
       timezone: Asia/Jakarta
+    groups:
+      artifacts:
+        patterns: [actions/*-artifact, actions/deploy-pages]
+      dockers:
+        patterns: [docker/*]
+      utilities:
+        patterns: [actions/checkout, actions/github-script, actions/attest-*]
