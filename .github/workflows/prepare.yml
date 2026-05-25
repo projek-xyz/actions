@@ -7,6 +7,9 @@ on:
         required: false
         type: string
         default: ${{ github.event.repository.default_branch || 'main' }}
+      commit-message:
+        required: false
+        type: string
       php-version:
         required: false
         type: string
@@ -264,6 +267,7 @@ jobs:
       - name: Project
         id: project
         env:
+          COMMIT_MESSAGE: ${{ inputs.commit-message }}
           HAS_NODE: ${{ steps.node.outputs.needs-node }}
           BASE_BRANCH: ${{ inputs.base-branch }}
         run: |
@@ -277,6 +281,9 @@ jobs:
           BRANCH_SLUG=$(echo $BRANCH_NAME | sed 's#/#_#g; s#\[##g; s#\]##g')
           BRANCH_SLUG=${BRANCH_SLUG:0:20}.${GITHUB_SHA:0:8}
 
+          COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
+          FOR_RELEASE=$([[ $COMMIT_TITLE =~ "chore(release)" ]] && echo "1" || echo "0")
+
           PR_NUMBER=$([[ $BRANCH_NAME =~ "/merge" ]] && echo "${BRANCH_NAME//\/merge/}" || echo "")
           APP_VERSION=$BRANCH_SLUG
 
@@ -287,6 +294,10 @@ jobs:
           if [[ -n $PR_NUMBER ]]; then
             BASE_BRANCH=$GITHUB_BASE_REF
             APP_VERSION="pr${PR_NUMBER}-${APP_VERSION}"
+          fi
+
+          if [[ $FOR_RELEASE -eq 1 ]]; then
+            APP_VERSION=${COMMIT#chore\(release\): }
           fi
 
           if [[ $GITHUB_REF =~ "refs/tags/" ]]; then
@@ -300,6 +311,7 @@ jobs:
           echo "branch-slug=$BRANCH_SLUG" >> $GITHUB_OUTPUT
           echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "base-branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
+          echo "commit-title=$COMMIT_TITLE" >> $GITHUB_OUTPUT
 
           # Prepare for `previous-run` and `changed-files` step
           cp -r .github/xyz-actions/.github/scripts .github/
