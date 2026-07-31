@@ -125,7 +125,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
 
-      - uses: actions/attest@v4
+      - uses: actions/attest@v4.2.0
         if: ${{ github.event_name == 'push' }}
         with:
           subject-name: ${{ inputs.registry }}/${{ steps.image-name.outputs.lowercase }}
