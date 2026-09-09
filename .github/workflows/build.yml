@@ -117,8 +117,19 @@ jobs:
 
       - name: Install dependencies
         id: app
+        env:
+          NODE_PM_NAME: ${{ inputs.node-pm-name }}
         run: |
-          ${{ inputs.node-pm-name }} ci
+          case "$NODE_PM_NAME" in
+            npm|pnpm|bun)
+              $NODE_PM_NAME ci
+              ;;
+            *)
+              echo "::error::Unsupported package manager '$NODE_PM_NAME'. Expected 'npm', 'pnpm' or 'bun'."
+              exit 1
+              ;;
+          esac
+
           [[ -f .github/.env.example ]] && cp .github/.env.example .env
           composer update --prefer-dist --no-scripts --no-interaction --no-progress --ansi
           echo "generated-key=$(php artisan key:generate --show)" >> $GITHUB_OUTPUT
@@ -139,12 +150,25 @@ jobs:
 
       - name: Build frontend
         env:
+          NODE_PM_NAME: ${{ inputs.node-pm-name }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_ORG: ${{ github.repository_owner }}
           SENTRY_PROJECT: ${{ inputs.sentry-project }}
         run: |
-          ${{ inputs.node-pm-name }} run build --mode ${{ env.APP_ENV }}
+          case "$NODE_PM_NAME" in
+            bun|pnpm)
+              $NODE_PM_NAME run build --mode "${{ env.APP_ENV }}"
+              ;;
+            npm)
+              # npm requires '--' to pass flags to the script; pnpm & bun forward them directly.
+              $NODE_PM_NAME run build -- --mode "${{ env.APP_ENV }}"
+              ;;
+            *)
+              echo "::error::Unsupported package manager '$NODE_PM_NAME'. Expected 'npm', 'pnpm' or 'bun'."
+              exit 1
+              ;;
+          esac
 
       - name: Store assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
