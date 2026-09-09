@@ -122,7 +122,7 @@ jobs:
         run: |
           case "$NODE_PM_NAME" in
             npm|pnpm|bun)
-              $NODE_PM_NAME ci
+              "$NODE_PM_NAME" ci
               ;;
             *)
               echo "::error::Unsupported package manager '$NODE_PM_NAME'. Expected 'npm', 'pnpm' or 'bun'."
@@ -158,11 +158,11 @@ jobs:
         run: |
           case "$NODE_PM_NAME" in
             bun|pnpm)
-              $NODE_PM_NAME run build --mode "${{ env.APP_ENV }}"
+              "$NODE_PM_NAME" run build --mode "$APP_ENV"
               ;;
             npm)
               # npm requires '--' to pass flags to the script; pnpm & bun forward them directly.
-              $NODE_PM_NAME run build -- --mode "${{ env.APP_ENV }}"
+              "$NODE_PM_NAME" run build -- --mode "$APP_ENV"
               ;;
             *)
               echo "::error::Unsupported package manager '$NODE_PM_NAME'. Expected 'npm', 'pnpm' or 'bun'."
