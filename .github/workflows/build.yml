@@ -13,11 +13,26 @@ on:
       composer-cache-key:
         default: php-${{ inputs.php-version }}
         type: string
-      sentry-project:
-        required: false
+      needs-bun:
+        default: false
+        type: boolean
+      needs-npm:
+        default: false
+        type: boolean
+      needs-pnpm:
+        default: false
+        type: boolean
+      node-pm-name:
+        required: true
+        type: string
+      node-pm-version:
+        required: true
         type: string
       php-version:
-        default:  '8.2'
+        default: '8.2'
+        type: string
+      sentry-project:
+        required: false
         type: string
       target-env:
         description: 'Build target'
@@ -58,25 +73,35 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
         with:
-          run_install: true
+          persist-credentials: false
+
+      - name: Setup bun
+        if: ${{ inputs.needs-bun }}
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.node-pm-version }}
 
       - name: Setup node.js
+        if: ${{ inputs.needs-npm }}
         uses: actions/setup-node@v7
         with:
-          cache: pnpm
-          node-version: lts/*
+          node-version: ${{ inputs.node-pm-version }}
+
+      - name: Setup pnpm
+        if: ${{ inputs.needs-pnpm }}
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with:
+          cache: true
+          runtime: 'node@24'
+          version: ${{ inputs.node-pm-version }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ inputs.php-version }}
-          extensions: curl, intl, libxml, mbstring, pcntl, ssh2, zip
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          php-version: ${{ inputs.php-version }}
 
       - name: Prepare Composer Cache
         uses: actions/cache@v6
@@ -88,6 +113,7 @@ jobs:
       - name: Install dependencies
         id: app
         run: |
+          ${{ inputs.node-pm-name }} ci
           [[ -f .github/.env.example ]] && cp .github/.env.example .env
           composer update --prefer-dist --no-scripts --no-interaction --no-progress --ansi
           echo "generated-key=$(php artisan key:generate --show)" >> $GITHUB_OUTPUT
@@ -113,7 +139,7 @@ jobs:
           SENTRY_ORG: ${{ github.repository_owner }}
           SENTRY_PROJECT: ${{ inputs.sentry-project }}
         run: |
-          pnpm build --mode ${{ env.APP_ENV }}
+          ${{ inputs.node-pm-name }} run build --mode ${{ env.APP_ENV }}
 
       - name: Store assets
         uses: actions/upload-artifact@v7
