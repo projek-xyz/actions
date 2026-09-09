@@ -131,7 +131,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -145,7 +145,7 @@ jobs:
 
       - name: Labeler
         if: steps.check.outputs.should-label == '1'
-        uses: actions/labeler@v7
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
         with:
           dot: true
 
@@ -188,13 +188,13 @@ jobs:
 
     steps:
       - name: Checkout head repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout actions repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           repository: projek-xyz/actions
@@ -318,7 +318,7 @@ jobs:
 
       - name: Setup PHP
         if: steps.php.outputs.needs-php == '1'
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ inputs.php-version }}
           tools: ${{ steps.php.outputs.php-tools }}
@@ -361,7 +361,7 @@ jobs:
 
       - name: Previous workflow run
         id: previous-run
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           CURRENT_BRANCH: ${{ steps.project.outputs.branch-name }}
           TARGET_BRANCH: ${{ steps.project.outputs.base-branch }}
@@ -379,7 +379,7 @@ jobs:
           github.event_name != 'workflow_dispatch' &&
           steps.previous-run.outputs.available == '1'
         id: changed-files
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         continue-on-error: true
         env:
           PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}

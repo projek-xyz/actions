@@ -7,17 +7,28 @@ on:
         description: 'Branch target'
         default: main
         type: string
+      build-path:
+        default: |
+          public/build
+          public/vendor
+        type: string
       composer-cache-dir:
         required: true
         type: string
       composer-cache-key:
         default: php-${{ inputs.php-version }}
         type: string
-      sentry-project:
-        required: false
+      node-pm-name:
+        required: true
+        type: string
+      node-pm-version:
+        required: true
         type: string
       php-version:
-        default:  '8.2'
+        default: '8.2'
+        type: string
+      sentry-project:
+        required: false
         type: string
       target-env:
         description: 'Build target'
@@ -57,37 +68,59 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          run_install: true
+          persist-credentials: false
+
+      - name: Setup bun
+        if: ${{ inputs.node-pm-name == 'bun' }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ inputs.node-pm-version }}
 
       - name: Setup node.js
-        uses: actions/setup-node@v7
+        if: ${{ inputs.node-pm-name == 'npm' }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          cache: pnpm
           node-version: lts/*
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - name: Setup pnpm
+        if: ${{ inputs.node-pm-name == 'pnpm' }}
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
         with:
-          php-version: ${{ inputs.php-version }}
-          extensions: curl, intl, libxml, mbstring, pcntl, ssh2, zip
+          cache: true
+          runtime: 'node@lts'
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          php-version: ${{ inputs.php-version }}
 
       - name: Prepare Composer Cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ inputs.composer-cache-dir }}
-          key: ${{ inputs.composer-cache-key }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ inputs.composer-cache-key }}-composer-
+          key: php${{ inputs.php-version }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: php${{ inputs.php-version }}-composer-
 
       - name: Install dependencies
         id: app
+        env:
+          NODE_PM_NAME: ${{ inputs.node-pm-name }}
         run: |
+          case "$NODE_PM_NAME" in
+            npm|pnpm|bun)
+              "$NODE_PM_NAME" ci
+              ;;
+            *)
+              echo "::error::Unsupported package manager '$NODE_PM_NAME'. Expected 'npm', 'pnpm' or 'bun'."
+              exit 1
+              ;;
+          esac
+
+          echo "NODE_PM_NAME=$NODE_PM_NAME" >> $GITHUB_ENV
           [[ -f .github/.env.example ]] && cp .github/.env.example .env
           composer update --prefer-dist --no-scripts --no-interaction --no-progress --ansi
           echo "generated-key=$(php artisan key:generate --show)" >> $GITHUB_OUTPUT
@@ -108,17 +141,28 @@ jobs:
 
       - name: Build frontend
         env:
+          NODE_PM_NAME: ${{ inputs.node-pm-name }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_ORG: ${{ github.repository_owner }}
           SENTRY_PROJECT: ${{ inputs.sentry-project }}
         run: |
-          pnpm build --mode ${{ env.APP_ENV }}
+          case "$NODE_PM_NAME" in
+            bun|pnpm)
+              "$NODE_PM_NAME" run build --mode "$APP_ENV"
+              ;;
+            npm)
+              # npm requires '--' to pass flags to the script; pnpm & bun forward them directly.
+              "$NODE_PM_NAME" run build -- --mode "$APP_ENV"
+              ;;
+            *)
+              echo "::error::Unsupported package manager '$NODE_PM_NAME'. Expected 'npm', 'pnpm' or 'bun'."
+              exit 1
+              ;;
+          esac
 
       - name: Store assets
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-${{ env.APP_ENV }}
-          path: |
-            public/build
-            public/vendor
+          path: ${{ inputs.build-path }}

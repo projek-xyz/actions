@@ -7,6 +7,14 @@ on:
         description: App Version
         required: false
         type: string
+      artifact-name:
+        default: ''
+        description: Artifact name
+        type: string
+      artifact-path:
+        default: ''
+        description: Artifact path
+        type: string
       build-args:
         description: Docker build args that will be passed to `build-args` input in `docker/build-push-action`
         required: false
@@ -71,7 +79,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
 
@@ -83,11 +91,18 @@ jobs:
           # Extract repository name and convert to lowercase
           echo "lowercase=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+      - name: Download build artifact
+        if: ${{ inputs.artifact-name != '' && inputs.artifact-path != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ inputs.registry }}
           username: ${{ inputs.username }}
@@ -95,7 +110,7 @@ jobs:
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ inputs.registry }}/${{ steps.image-name.outputs.lowercase }}
           labels: ${{ inputs.image-labels }}
@@ -113,7 +128,7 @@ jobs:
 
       - name: Build and push Docker image
         id: push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           build-args: ${{ inputs.build-args }}
           context: ${{ inputs.context }}
@@ -125,7 +140,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
 
-      - uses: actions/attest@v4.2.0
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         if: ${{ github.event_name == 'push' }}
         with:
           subject-name: ${{ inputs.registry }}/${{ steps.image-name.outputs.lowercase }}
