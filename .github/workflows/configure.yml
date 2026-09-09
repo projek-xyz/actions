@@ -70,7 +70,7 @@ jobs:
 
       - name: Labeler
         if: steps.check.outputs.should-label == '1'
-        uses: actions/labeler@v6
+        uses: actions/labeler@v7
         with:
           dot: true
 
