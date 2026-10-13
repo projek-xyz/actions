@@ -1,0 +1,96 @@
+{
+  "workflow": "docker",
+  "inputs": [
+    {
+      "name": "app-version",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "artifact-name",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "artifact-path",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "build-args",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "context",
+      "type": "string",
+      "required": false,
+      "default": "."
+    },
+    {
+      "name": "docker-file",
+      "type": "string",
+      "required": true,
+      "default": null
+    },
+    {
+      "name": "image-labels",
+      "type": "string",
+      "required": false,
+      "default": "org.opencontainers.image.vendor=${{ github.repository_owner }}\n"
+    },
+    {
+      "name": "image-name",
+      "type": "string",
+      "required": false,
+      "default": "${{ github.repository }}"
+    },
+    {
+      "name": "image-slug",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "image-tag",
+      "type": "string",
+      "required": true,
+      "default": null
+    },
+    {
+      "name": "password",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "ref",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "registry",
+      "type": "string",
+      "required": false,
+      "default": "ghcr.io"
+    },
+    {
+      "name": "username",
+      "type": "string",
+      "required": false,
+      "default": "${{ github.actor }}"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "image-url",
+      "description": "The image URL"
+    }
+  ],
+  "secrets": []
+}

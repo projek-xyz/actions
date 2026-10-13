@@ -1,0 +1,18 @@
+{
+  "workflow": "report",
+  "inputs": [
+    {
+      "name": "has-coveralls",
+      "type": "boolean",
+      "required": false,
+      "default": false
+    }
+  ],
+  "outputs": [],
+  "secrets": [
+    {
+      "name": "COVERALLS_REPO_TOKEN",
+      "required": false
+    }
+  ]
+}

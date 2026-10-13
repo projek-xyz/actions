@@ -1,0 +1,163 @@
+{
+  "workflow": "prepare",
+  "inputs": [
+    {
+      "name": "base-branch",
+      "type": "string",
+      "required": false,
+      "default": "${{ github.event.repository.default_branch || 'main' }}"
+    },
+    {
+      "name": "bun-version",
+      "type": "string",
+      "required": false,
+      "default": "${{ vars.BUN_VERSION || '1.3.10' }}"
+    },
+    {
+      "name": "commit-message",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "node-version",
+      "type": "string",
+      "required": false,
+      "default": "${{ vars.NODE_VERSION || 'lts/*' }}"
+    },
+    {
+      "name": "php-version",
+      "type": "string",
+      "required": false,
+      "default": "${{ vars.PHP_VERSION || '8.1' }}"
+    },
+    {
+      "name": "pnpm-version",
+      "type": "string",
+      "required": false,
+      "default": "${{ vars.PNPM_VERSION || '10.12.4' }}"
+    },
+    {
+      "name": "target-env",
+      "type": "string",
+      "required": false,
+      "default": null
+    }
+  ],
+  "outputs": [
+    {
+      "name": "branch-name",
+      "description": "The name of the project branch."
+    },
+    {
+      "name": "branch-slug",
+      "description": "The slug of the project branch."
+    },
+    {
+      "name": "changed-files",
+      "description": "List of changed files."
+    },
+    {
+      "name": "composer-cache-dir",
+      "description": "The cache directory for Composer."
+    },
+    {
+      "name": "has-codecov",
+      "description": "Whether the project has Codecov."
+    },
+    {
+      "name": "has-coveralls",
+      "description": "Whether the project has Coveralls."
+    },
+    {
+      "name": "has-previous",
+      "description": "Whether the workflow has a previous runs."
+    },
+    {
+      "name": "is-laravel",
+      "description": "Whether the project is a Laravel project."
+    },
+    {
+      "name": "needs-bun",
+      "description": "Whether the project needs Bun."
+    },
+    {
+      "name": "needs-composer",
+      "description": "Whether the project needs Composer."
+    },
+    {
+      "name": "needs-node",
+      "description": ""
+    },
+    {
+      "name": "needs-php",
+      "description": "Whether the project needs PHP."
+    },
+    {
+      "name": "needs-pnpm",
+      "description": "Whether the project needs pnpm."
+    },
+    {
+      "name": "needs-wpcli",
+      "description": "Whether the project needs WP-CLI."
+    },
+    {
+      "name": "node-pm-name",
+      "description": "The name of the Node.js package manager: npm, pnpm & bun."
+    },
+    {
+      "name": "node-pm-version",
+      "description": "The version of the Node.js package manager."
+    },
+    {
+      "name": "pr-number",
+      "description": "The PR number, if any."
+    },
+    {
+      "name": "previous-run",
+      "description": "The previous workflow run object: { sha, message, artifacts: {id, name}[] }."
+    },
+    {
+      "name": "project-branch-name",
+      "description": "Deprecated! use `branch-name` instead."
+    },
+    {
+      "name": "project-repo-name",
+      "description": "The lower-case name of the project repository."
+    },
+    {
+      "name": "project-version",
+      "description": "The version of the project."
+    },
+    {
+      "name": "should-build",
+      "description": "Whether should run the build."
+    },
+    {
+      "name": "should-deploy",
+      "description": "Whether should run the deployment."
+    },
+    {
+      "name": "should-reports",
+      "description": "Whether test coverage reports should be generated."
+    },
+    {
+      "name": "should-tests",
+      "description": "Whether should run the tests."
+    },
+    {
+      "name": "wpcli-cache-dir",
+      "description": "The cache directory for WP-CLI."
+    }
+  ],
+  "secrets": [
+    {
+      "name": "CODECOV_TOKEN",
+      "required": false
+    },
+    {
+      "name": "COVERALLS_REPO_TOKEN",
+      "required": false
+    }
+  ]
+}

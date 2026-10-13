@@ -1,0 +1,93 @@
+{
+  "workflow": "build",
+  "inputs": [
+    {
+      "name": "branch",
+      "type": "string",
+      "required": false,
+      "default": "main"
+    },
+    {
+      "name": "build-path",
+      "type": "string",
+      "required": false,
+      "default": "public/build\npublic/vendor\n"
+    },
+    {
+      "name": "composer-cache-dir",
+      "type": "string",
+      "required": true,
+      "default": null
+    },
+    {
+      "name": "composer-cache-key",
+      "type": "string",
+      "required": false,
+      "default": "php-${{ inputs.php-version }}"
+    },
+    {
+      "name": "node-pm-name",
+      "type": "string",
+      "required": true,
+      "default": null
+    },
+    {
+      "name": "node-pm-version",
+      "type": "string",
+      "required": true,
+      "default": null
+    },
+    {
+      "name": "php-version",
+      "type": "string",
+      "required": false,
+      "default": "8.2"
+    },
+    {
+      "name": "sentry-project",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "target-env",
+      "type": "string",
+      "required": false,
+      "default": "testing"
+    },
+    {
+      "name": "target-url",
+      "type": "string",
+      "required": false,
+      "default": "http://localhost:8000"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "app-key",
+      "description": ""
+    },
+    {
+      "name": "target-env",
+      "description": ""
+    },
+    {
+      "name": "target-url",
+      "description": ""
+    }
+  ],
+  "secrets": [
+    {
+      "name": "ACCESS_TOKEN",
+      "required": false
+    },
+    {
+      "name": "SENTRY_AUTH_TOKEN",
+      "required": false
+    },
+    {
+      "name": "SENTRY_DSN",
+      "required": false
+    }
+  ]
+}
