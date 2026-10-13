@@ -6,8 +6,10 @@
 // reusable workflow gets a section when baseline → PR carries at least one
 // hard (consumer-observable) contract change — removed input/output/secret,
 // retype, required tightening, added-required input/secret — with consumers
-// filtered per change (removals and retypes hit passers, tightenings hit
-// non-passers, secrets hit every consumer). Soft changes (default changes,
+// filtered per change (removals and retypes hit passers — a file passing at
+// any call site counts; tightenings hit calls that omit the input — any
+// omitted call impacts its file; secrets hit every consumer). Soft changes
+// (default changes,
 // optional additions, relaxations) are silent: they only need a baseline
 // regeneration. The contract baseline comes from contracts/<workflow>.json
 // at the merge base of the PR — a PR that hand-updates the contract still
@@ -70,8 +72,13 @@ export function changedWorkflowFiles(diffText) {
  * Hard change → does this consumer file sit in the blast radius?
  * (Soft kinds never reach here; secrets are untracked, so all consumers.)
  *
+ * Passers (removed/retyped) use the file-wide union: any call site passing
+ * means the file breaks. Tightenings validate per call site in GitHub, so
+ * they use the per-call sets: any call omitting the input means the file
+ * breaks — a union here would hide a mixed-call file.
+ *
  * @param {import('./check-contracts.mjs').ContractChange} change
- * @param {{repo: string, path: string, passes: Set<string>, reads: Set<string>}} file
+ * @param {{repo: string, path: string, passes: Set<string>, reads: Set<string>, inputSets: Set<string>[]}} file
  * @returns {boolean}
  */
 function hitsChange(change, file) {
@@ -83,7 +90,7 @@ function hitsChange(change, file) {
       return file.passes.has(change.name);
     case 'tightened':
     case 'added-required':
-      return !file.passes.has(change.name);
+      return file.inputSets.some((inputs) => !inputs.has(change.name));
     default:
       return false;
   }
@@ -124,20 +131,23 @@ export function analyzeChanges({ changedFiles, baseContracts, currentContracts, 
       continue;
     }
 
-    // Union each consumer file's surface for this workflow across its calls.
-    /** @type {Array<{repo: string, path: string, passes: Set<string>, reads: Set<string>}>} */
+    // Union each consumer file's surface for this workflow across its calls
+    // (passes/reads feed display and passer matching); inputSets keeps the
+    // per-call input sets for tightening matching.
+    /** @type {Array<{repo: string, path: string, passes: Set<string>, reads: Set<string>, inputSets: Set<string>[]}>} */
     const consumerFiles = [];
     for (const entry of inventory) {
       const calls = entry.calls.filter((c) => c.workflow === name);
       if (calls.length === 0) continue;
       let rec = consumerFiles.find((f) => f.repo === entry.repo && f.path === entry.path);
       if (!rec) {
-        rec = { repo: entry.repo, path: entry.path, passes: new Set(), reads: new Set() };
+        rec = { repo: entry.repo, path: entry.path, passes: new Set(), reads: new Set(), inputSets: [] };
         consumerFiles.push(rec);
       }
       for (const call of calls) {
         for (const input of call.inputs) rec.passes.add(input);
         for (const output of call.outputs ?? []) rec.reads.add(output);
+        rec.inputSets.push(new Set(call.inputs));
       }
     }
 

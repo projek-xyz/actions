@@ -295,6 +295,38 @@ test('required tightening impacts consumers NOT passing the input', () => {
   ]);
 });
 
+test('tightening matches per-call: any call omitting the input impacts the file', () => {
+  const model = analyzeChanges({
+    changedFiles: ['.github/workflows/prepare.yml'],
+    baseContracts: new Map([['prepare', contract(['token'], [])]]),
+    currentContracts: new Map([['prepare', {
+      workflow: 'x',
+      inputs: [{ name: 'token', type: 'string', required: true, default: null }],
+      outputs: [], secrets: [],
+    }]]),
+    inventory: [
+      // two jobs call prepare; only one passes token → the omitting call breaks
+      { repo: 'org/mixed', path: '.github/workflows/deploy.yml', manual: false,
+        calls: [
+          { workflow: 'prepare', inputs: ['token'], outputs: [] },
+          { workflow: 'prepare', inputs: [], outputs: [] },
+        ] },
+      // every call passes token → genuinely unaffected
+      { repo: 'org/all-pass', path: '.github/workflows/ci.yml', manual: false,
+        calls: [
+          { workflow: 'prepare', inputs: ['token'], outputs: [] },
+          { workflow: 'prepare', inputs: ['token'], outputs: [] },
+        ] },
+    ],
+  });
+
+  const [section] = model.sections;
+  assert.equal(section.status, 'impacted');
+  assert.deepEqual(section.impacted, [
+    { repo: 'org/mixed', files: [{ path: '.github/workflows/deploy.yml', passes: ['token'], reads: [] }] },
+  ]);
+});
+
 test('hard secret-only change CAUTIONs every recorded consumer', () => {
   const model = analyzeChanges({
     changedFiles: ['.github/workflows/prepare.yml'],
