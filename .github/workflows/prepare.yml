@@ -295,7 +295,8 @@ jobs:
           PR_NUMBER=$([[ $BRANCH_NAME =~ "/merge" ]] && echo "${BRANCH_NAME//\/merge/}" || echo "")
           APP_VERSION=$BRANCH_SLUG
 
-          PKG_VERSION=$([[ $HAS_NODE -eq 1 ]] && jq -r '.version | ""' package.json)
+          PKG_VERSION=
+          if [[ $HAS_NODE -eq 1 ]]; then PKG_VERSION=$(jq -r '.version | ""' package.json); fi
 
           if [[ -n $PKG_VERSION ]]; then
             APP_VERSION="${PKG_VERSION}-${APP_VERSION}"
