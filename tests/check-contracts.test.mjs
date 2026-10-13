@@ -116,3 +116,16 @@ test('isBreakingChange recognizes only the hard kinds', () => {
   for (const change of hard) assert.equal(isBreakingChange({ kind: 'input', name: 'x', change }), true, change);
   for (const change of soft) assert.equal(isBreakingChange({ kind: 'input', name: 'x', change }), false, change);
 });
+
+test('multi-move inputs resolve hard-first: retype and tighten beat default changes', () => {
+  const base = contract([input('a', { type: 'string', def: '1' }), input('b', { def: '1' })]);
+  const curr = contract([input('a', { type: 'number', def: '2' }), input('b', { def: '2', required: true })]);
+
+  const diff = diffContracts(base, curr);
+  assert.deepEqual(diff.breaking, ['input changed: a', 'input changed: b']);
+  assert.deepEqual(diff.additions, []);
+  assert.deepEqual(diff.changes, [
+    { kind: 'input', name: 'a', change: 'retyped' },
+    { kind: 'input', name: 'b', change: 'tightened' },
+  ]);
+});
