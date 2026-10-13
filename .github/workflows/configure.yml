@@ -102,7 +102,7 @@ jobs:
         env:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
         run: |
-          if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> "$GITHUB_OUTPUT"; fi
 
       - name: Repository
         id: repo
@@ -115,7 +115,7 @@ jobs:
 
           if [ -f ./package.json ]; then
             # Extract version number from `package.json` file
-            echo "app-version=$(cat package.json | jq -r '.version')" >> "$GITHUB_OUTPUT"
+            echo "app-version=$(jq -r '.version' package.json)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Environment
@@ -134,7 +134,7 @@ jobs:
             echo "should-reports=1" >> "$GITHUB_OUTPUT";
           fi
 
-          if ! [ -z "${PHP_VERSION}" ]; then
+          if [ -n "${PHP_VERSION}" ]; then
             echo "has-php=1" >> "$GITHUB_OUTPUT";
           fi
 
@@ -177,7 +177,7 @@ jobs:
             exit 1
           fi
 
-          if ! [ -z "${LARAVEL_VERSION}" ]; then
+          if [ -n "${LARAVEL_VERSION}" ]; then
             COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"
           fi
 
