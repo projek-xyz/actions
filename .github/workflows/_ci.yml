@@ -74,3 +74,83 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  smoke-node:
+    name: Smoke (self / npm)
+    uses: ./.github/workflows/prepare.yml
+
+  smoke-php:
+    name: Smoke (fixture / php-laravel)
+    uses: ./.github/workflows/prepare.yml
+    with:
+      project-ref: fixtures/prepare-php-laravel
+
+  smoke-bun:
+    name: Smoke (fixture / node-bun)
+    uses: ./.github/workflows/prepare.yml
+    with:
+      project-ref: fixtures/prepare-node-bun
+
+  smoke-assert:
+    name: Smoke assertions
+    runs-on: ubuntu-latest
+    needs: [smoke-node, smoke-php, smoke-bun]
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Assert prepare outputs per variant
+        env:
+          SELF_NEEDS_NODE: ${{ needs.smoke-node.outputs.needs-node }}
+          SELF_NEEDS_PNPM: ${{ needs.smoke-node.outputs.needs-pnpm }}
+          SELF_NEEDS_BUN: ${{ needs.smoke-node.outputs.needs-bun }}
+          SELF_PM_NAME: ${{ needs.smoke-node.outputs.node-pm-name }}
+          SELF_BRANCH_SLUG: ${{ needs.smoke-node.outputs.branch-slug }}
+          SELF_VERSION: ${{ needs.smoke-node.outputs.project-version }}
+          PHP_NEEDS_PHP: ${{ needs.smoke-php.outputs.needs-php }}
+          PHP_NEEDS_COMPOSER: ${{ needs.smoke-php.outputs.needs-composer }}
+          PHP_NEEDS_WPCLI: ${{ needs.smoke-php.outputs.needs-wpcli }}
+          PHP_IS_LARAVEL: ${{ needs.smoke-php.outputs.is-laravel }}
+          PHP_NEEDS_NODE: ${{ needs.smoke-php.outputs.needs-node }}
+          BUN_NEEDS_NODE: ${{ needs.smoke-bun.outputs.needs-node }}
+          BUN_NEEDS_BUN: ${{ needs.smoke-bun.outputs.needs-bun }}
+          BUN_PM_NAME: ${{ needs.smoke-bun.outputs.node-pm-name }}
+        run: |
+          fail=0
+          check() {
+            local label="$1" actual="$2" expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${label}: expected '${expected}', got '${actual}'"
+              fail=1
+            fi
+          }
+          check_nonempty() {
+            local label="$1" actual="$2"
+            if [ -z "$actual" ]; then
+              echo "::error::${label}: expected non-empty, got ''"
+              fail=1
+            fi
+          }
+
+          # Self run (this repo is a Node/npm consumer project)
+          check "self.needs-node" "$SELF_NEEDS_NODE" "1"
+          check "self.needs-pnpm" "$SELF_NEEDS_PNPM" "0"
+          check "self.needs-bun" "$SELF_NEEDS_BUN" "0"
+          check "self.node-pm-name" "$SELF_PM_NAME" "npm"
+          check_nonempty "self.branch-slug" "$SELF_BRANCH_SLUG"
+          check_nonempty "self.project-version" "$SELF_VERSION"
+
+          # PHP fixture branch
+          check "php.needs-php" "$PHP_NEEDS_PHP" "1"
+          check "php.needs-composer" "$PHP_NEEDS_COMPOSER" "1"
+          check "php.needs-wpcli" "$PHP_NEEDS_WPCLI" "1"
+          check "php.is-laravel" "$PHP_IS_LARAVEL" "1"
+          check "php.needs-node" "$PHP_NEEDS_NODE" "0"
+
+          # Bun fixture branch
+          check "bun.needs-node" "$BUN_NEEDS_NODE" "1"
+          check "bun.needs-bun" "$BUN_NEEDS_BUN" "1"
+          check "bun.node-pm-name" "$BUN_PM_NAME" "bun"
+
+          exit $fail
