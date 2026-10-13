@@ -4,8 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 jobs:
@@ -223,6 +221,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Fresh inventory per run — the impact report is its only consumer.
+      # DEFAULT_PAT is step-scoped: it must not be present in the environment
+      # while `npm install` runs dependency lifecycle scripts. Failure is
+      # tolerated (continue-on-error) so the report still posts with the
+      # inventory-unavailable warning.
+      - name: Refresh consumer inventory
+        continue-on-error: true
+        env:
+          DEFAULT_PAT: ${{ secrets.DEFAULT_PAT }}
+        run: node tools/inventory.mjs
+
       - name: Generate impact report
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -249,39 +258,3 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
-
-  inventory-refresh:
-    name: Inventory refresh
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: lts/*
-
-      - name: Install dependencies
-        run: npm install
-
-      # DEFAULT_PAT is step-scoped: it must not be present in the environment
-      # while `npm install` runs dependency lifecycle scripts.
-      - name: Rebuild consumer inventory
-        env:
-          DEFAULT_PAT: ${{ secrets.DEFAULT_PAT }}
-        run: node tools/inventory.mjs
-
-      - name: Commit refreshed inventory
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add consumers.yml
-          git diff --cached --quiet && exit 0
-          git commit -m "chore(consumers): refresh inventory"
-          git push

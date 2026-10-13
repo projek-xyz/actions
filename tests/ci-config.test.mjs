@@ -37,11 +37,19 @@ test('smoke call jobs declare permissions instead of inheriting repo defaults', 
   }
 });
 
-test('DEFAULT_PAT is scoped to the inventory step, not the job', () => {
-  const job = ci.jobs['inventory-refresh'];
+test('impact job refreshes the inventory per run with step-scoped, failure-tolerant auth', () => {
+  const refresh = ci.jobs.impact.steps.find((/** @type {any} */ s) => s.name === 'Refresh consumer inventory');
+  assert.ok(refresh, 'impact job refreshes the inventory before generating the report');
+  assert.equal(refresh['continue-on-error'], true, 'a refresh failure must not skip comment posting');
+  assert.equal(refresh.env?.DEFAULT_PAT, '${{ secrets.DEFAULT_PAT }}');
+  assert.equal(refresh.run, 'node tools/inventory.mjs');
 
-  assert.equal(job.env?.DEFAULT_PAT, undefined, 'job-level env must not hold the PAT');
-  const step = job.steps.find((/** @type {any} */ s) => s.name === 'Rebuild consumer inventory');
-  assert.ok(step);
-  assert.equal(step.env.DEFAULT_PAT, '${{ secrets.DEFAULT_PAT }}');
+  const refreshIdx = ci.jobs.impact.steps.indexOf(refresh);
+  const generateIdx = ci.jobs.impact.steps.findIndex((/** @type {any} */ s) => s.name === 'Generate impact report');
+  assert.ok(refreshIdx < generateIdx, 'refresh runs before the report is generated');
+});
+
+test('no scheduled refresh and no standalone inventory job — refresh is per impact run', () => {
+  assert.equal(ci.jobs['inventory-refresh'], undefined);
+  assert.equal(ci.on.schedule, undefined);
 });
