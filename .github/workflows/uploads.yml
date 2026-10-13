@@ -4,30 +4,25 @@ on:
   workflow_call:
     inputs:
       files:
+        default: ''
         description: Multiline list of files or wildcards to upload
-        required: false
         type: string
-        default: ''
       artifact_name:
-        description: Name of the artifact to download
-        required: false
-        type: string
         default: 'release-archives'
+        description: Name of the artifact to download
+        type: string
       branch_name:
-        description: Name of the branch to download artifacts from
-        required: false
-        type: string
         default: 'main'
-      workflow_name:
-        description: Name of the workflow to download artifacts from
-        required: false
+        description: Name of the branch to download artifacts from
         type: string
+      workflow_name:
         default: ''
+        description: Name of the workflow to download artifacts from
+        type: string
       check_attempts:
-        description: Number of times to check for release availability
-        required: false
-        type: number
         default: 10
+        description: Number of times to check for release availability
+        type: number
 
 jobs:
   uploads:
