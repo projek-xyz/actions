@@ -38,6 +38,12 @@
       "default": "${{ vars.PNPM_VERSION || '10.12.4' }}"
     },
     {
+      "name": "project-ref",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
       "name": "target-env",
       "type": "string",
       "required": false,
