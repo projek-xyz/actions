@@ -107,7 +107,10 @@ export function renderImpactReport(changed, inventoryEntries, contracts, contrac
 
     if (contractChanged.includes(name)) {
       lines.push('');
-      lines.push(`> ⚠ contract changed — this PR modifies \`contracts/${name}.json\`; verify compatibility for the consumers above.`);
+      lines.push('> [!WARNING]');
+      lines.push(
+        `> contract changed — this PR modifies \`contracts/${name}.json\`; verify compatibility for the consumers above.`,
+      );
     }
 
     lines.push('');

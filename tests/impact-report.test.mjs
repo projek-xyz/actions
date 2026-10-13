@@ -72,7 +72,7 @@ test('renderImpactReport lists consumers with contract-intersected inputs used',
   assert.ok(report.includes('`org-b/two`'), 'second consumer listed');
   assert.ok(report.includes('php-version'), 'recorded input in contract shown as used');
   assert.ok(!report.includes('gone-input'), 'recorded input missing from contract excluded');
-  assert.ok(!report.includes('⚠ contract changed'), 'no contract marker without contract diff');
+  assert.ok(!report.includes('> [!WARNING]'), 'no contract warning without contract diff');
 });
 
 test('renderImpactReport says so when a changed workflow has no known consumers', () => {
@@ -84,7 +84,8 @@ test('renderImpactReport says so when a changed workflow has no known consumers'
 test('renderImpactReport marks workflows whose contract file changed in the PR', () => {
   const report = renderImpactReport(['prepare.yml'], INVENTORY, CONTRACTS, ['prepare']);
 
-  assert.ok(report.includes('⚠ contract changed'));
+  assert.ok(report.includes('> [!WARNING]'), 'uses GitHub warning callout');
+  assert.ok(report.includes('contract changed — this PR modifies `contracts/prepare.json`'));
 });
 
 test('renderImpactReport with no workflow changes says nothing to report', () => {
