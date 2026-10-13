@@ -11,6 +11,7 @@
   "scripts": {
     "consumers": "node tools/inventory.mjs",
     "contracts": "node tools/check-contracts.mjs",
+    "impact": "node tools/impact-report.mjs",
     "lint": "actionlint && bash tools/check-pins.sh",
     "test": "node --test 'tests/**/*.test.mjs'",
     "verify": "npm run lint && npm run contracts && npm test"
