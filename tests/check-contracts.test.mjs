@@ -13,7 +13,29 @@ test('identical contracts produce no breaking changes and no additions', () => {
   const base = contract([input('a')], [{ name: 'o', description: 'd' }], [{ name: 's', required: false }]);
   const curr = contract([input('a')], [{ name: 'o', description: 'other' }], [{ name: 's', required: false }]);
 
-  assert.deepEqual(diffContracts(base, curr), { breaking: [], additions: [] });
+  assert.deepEqual(diffContracts(base, curr), { breaking: [], additions: [], changes: [] });
+});
+
+test('changes carries structured kind/name/change entries in message order', () => {
+  const base = contract(
+    [input('gone'), input('t', { type: 'string' }), input('r', { required: true })],
+    [{ name: 'out-gone', description: '' }, { name: 'out-keep', description: '' }],
+    [{ name: 's-new', required: false }],
+  );
+  const curr = contract(
+    [input('t', { type: 'number' }), input('r', { required: false }), input('added')],
+    [{ name: 'out-keep', description: '' }],
+    [{ name: 's-new', required: true }],
+  );
+
+  assert.deepEqual(diffContracts(base, curr).changes, [
+    { kind: 'input', name: 'gone', change: 'removed' },
+    { kind: 'input', name: 't', change: 'changed' },
+    { kind: 'input', name: 'r', change: 'relaxed' },
+    { kind: 'input', name: 'added', change: 'added' },
+    { kind: 'output', name: 'out-gone', change: 'removed' },
+    { kind: 'secret', name: 's-new', change: 'changed' },
+  ]);
 });
 
 test('removed input is breaking', () => {

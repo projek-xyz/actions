@@ -10,9 +10,17 @@ import { extractCallContract, listWorkflowFiles } from './extract-contracts.mjs'
  */
 
 /**
+ * @typedef {object} ContractChange
+ * @property {'input'|'output'|'secret'} kind
+ * @property {string} name
+ * @property {'removed'|'added'|'changed'|'relaxed'} change
+ */
+
+/**
  * @typedef {object} ContractDiff
  * @property {string[]} breaking entries that would break consumers
  * @property {string[]} additions entries requiring a baseline regeneration
+ * @property {ContractChange[]} changes structured view, same order as the messages
  */
 
 /**
@@ -31,9 +39,11 @@ export function diffContracts(baseline, current) {
   const breaking = [];
   /** @type {string[]} */
   const additions = [];
+  /** @type {ContractChange[]} */
+  const changes = [];
 
   /**
-   * @param {string} kind
+   * @param {'input'|'output'|'secret'} kind
    * @param {{name: string}[]} baseList
    * @param {{name: string}[]} currList
    * @param {(b: any, c: any) => void} [check]
@@ -46,21 +56,27 @@ export function diffContracts(baseline, current) {
       const other = curr.get(name);
       if (!other) {
         breaking.push(`${kind} removed: ${name}`);
+        changes.push({ kind, name, change: 'removed' });
         continue;
       }
       check?.(entry, other);
     }
 
     for (const name of curr.keys()) {
-      if (!base.has(name)) additions.push(`${kind} added: ${name}`);
+      if (!base.has(name)) {
+        additions.push(`${kind} added: ${name}`);
+        changes.push({ kind, name, change: 'added' });
+      }
     }
   };
 
   compare('input', baseline.inputs, current.inputs, (b, c) => {
     if (b.type !== c.type || JSON.stringify(b.default) !== JSON.stringify(c.default) || (b.required === false && c.required === true)) {
       breaking.push(`input changed: ${b.name}`);
+      changes.push({ kind: 'input', name: b.name, change: 'changed' });
     } else if (b.required === true && c.required === false) {
       additions.push(`input relaxed: ${b.name}`);
+      changes.push({ kind: 'input', name: b.name, change: 'relaxed' });
     }
   });
 
@@ -69,12 +85,14 @@ export function diffContracts(baseline, current) {
   compare('secret', baseline.secrets, current.secrets, (b, c) => {
     if (b.required === false && c.required === true) {
       breaking.push(`secret changed: ${b.name}`);
+      changes.push({ kind: 'secret', name: b.name, change: 'changed' });
     } else if (b.required === true && c.required === false) {
       additions.push(`secret relaxed: ${b.name}`);
+      changes.push({ kind: 'secret', name: b.name, change: 'relaxed' });
     }
   });
 
-  return { breaking, additions };
+  return { breaking, additions, changes };
 }
 
 /**
