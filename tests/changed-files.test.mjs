@@ -130,6 +130,29 @@ test('package-manager lockfile patterns: only the active pm globs its lockfile',
   }
 });
 
+test('bun.lock change builds only when the active pm is bun', async () => {
+  const cases = [
+    { nodePM: 'pnpm', yielded: [], expected: '0' },
+    { nodePM: 'npm', yielded: [], expected: '0' },
+    { nodePM: 'bun', yielded: ['/workspace/bun.lock'], expected: '1' },
+  ];
+
+  for (const { nodePM, yielded, expected } of cases) {
+    const changedFiles = await loadChangedFiles();
+    const { outputs, core } = makeCore();
+    const exec = makeExec('bun.lock');
+    const { glob } = makeGlob(yielded);
+
+    await changedFiles({ context: ctx('push'), core, exec, glob })(
+      'aaaaaaaabbbbbbbbb',
+      'ccccccccdddddddd',
+      { isPhp: false, isNode: true, nodePM },
+    );
+
+    assert.equal(outputs['should-build'], expected, `nodePM=${nodePM}`);
+  }
+});
+
 test('no changed files reports available=0 and no build', async () => {
   const changedFiles = await loadChangedFiles();
   const { outputs, core } = makeCore();
