@@ -1,0 +1,182 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { parseCallSites, mergeManual, renderInventoryYaml, searchAndCollect } from '../tools/inventory.mjs';
+
+const CONSUMER_CI_YAML = `
+name: CI
+on: [push]
+jobs:
+  prepare:
+    uses: projek-xyz/actions/.github/workflows/prepare.yml@main
+    with:
+      php-version: '8.3'
+      base-branch: dev
+    secrets: inherit
+  build:
+    needs: prepare
+    uses: projek-xyz/actions/.github/workflows/build.yml@main
+    with:
+      branch: \${{ needs.prepare.outputs.branch-name }}
+      build-path: dist
+  other-org:
+    uses: someone/actions/.github/workflows/prepare.yml@v1
+    with:
+      foo: bar
+  local:
+    uses: ./.github/workflows/local.yml
+    with:
+      nothing: true
+`;
+
+const CONSUMER_RELEASE_YAML = `
+name: Release
+on: workflow_dispatch
+jobs:
+  upload:
+    uses: projek-xyz/actions/.github/workflows/uploads.yml@main
+`;
+
+const silentLog = { warn: () => {}, info: () => {} };
+
+function makeFetch({ searches, contents }) {
+  const calls = [];
+  return {
+    calls,
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url, options });
+      if (url.includes('/search/code')) {
+        const token = String(options.headers?.Authorization ?? '').replace('Bearer ', '');
+        const name = url.includes('prepare.yml') ? 'prepare' : 'build';
+        return { ok: true, status: 200, json: async () => ({ items: searches[`${token}:${name}`] ?? [] }) };
+      }
+      if (url.includes('/contents/')) {
+        const key = Object.keys(contents).find((k) => url.includes(k));
+        if (!key) return { ok: false, status: 404, json: async () => ({}), text: async () => '' };
+        return { ok: true, status: 200, json: async () => ({}), text: async () => contents[key] };
+      }
+      throw new Error(`unexpected url: ${url}`);
+    },
+  };
+}
+
+test('parseCallSites extracts our call sites with with: input names and ignores others', () => {
+  assert.deepEqual(parseCallSites(CONSUMER_CI_YAML, '.github/workflows/ci.yml'), [
+    { workflow: 'prepare', inputs: ['php-version', 'base-branch'] },
+    { workflow: 'build', inputs: ['branch', 'build-path'] },
+  ]);
+});
+
+test('searchAndCollect unions and dedupes hits across tokens; content fetched once per unique file', async () => {
+  const { fetchImpl, calls } = makeFetch({
+    searches: {
+      'tok1:prepare': [
+        { repository: { full_name: 'org-a/repo-one' }, path: '.github/workflows/ci.yml' },
+        { repository: { full_name: 'org-a/repo-one' }, path: 'README.md' },
+      ],
+      'tok2:prepare': [
+        { repository: { full_name: 'org-a/repo-one' }, path: '.github/workflows/ci.yml' },
+        { repository: { full_name: 'org-b/repo-two' }, path: '.github/workflows/release.yml' },
+      ],
+      'tok1:build': [{ repository: { full_name: 'org-a/repo-one' }, path: '.github/workflows/ci.yml' }],
+      'tok2:build': [],
+    },
+    contents: {
+      'org-a/repo-one/contents/.github/workflows/ci.yml': CONSUMER_CI_YAML,
+      'org-b/repo-two/contents/.github/workflows/release.yml': CONSUMER_RELEASE_YAML,
+    },
+  });
+
+  const entries = await searchAndCollect({
+    tokens: ['tok1', 'tok2'],
+    workflows: ['prepare', 'build'],
+    fetchImpl,
+    log: silentLog,
+  });
+
+  // README.md hit filtered out; repo-one deduped despite appearing in 3 searches
+  assert.equal(entries.length, 2);
+  const repoOne = entries.find((e) => e.repo === 'org-a/repo-one');
+  assert.ok(repoOne);
+  assert.equal(repoOne.path, '.github/workflows/ci.yml');
+  assert.equal(repoOne.manual, false);
+  assert.deepEqual(repoOne.calls.map((c) => c.workflow), ['prepare', 'build']);
+
+  const repoTwo = entries.find((e) => e.repo === 'org-b/repo-two');
+  assert.deepEqual(repoTwo.calls, [{ workflow: 'uploads', inputs: [] }]);
+
+  const contentFetches = calls.filter((c) => c.url.includes('/contents/'));
+  assert.equal(contentFetches.length, 2, 'raw content fetched once per unique repo+path');
+});
+
+test('searchAndCollect keeps the entry with calls: [] when content fetch fails', async () => {
+  const { fetchImpl } = makeFetch({
+    searches: { 'tok1:prepare': [{ repository: { full_name: 'org-c/private' }, path: '.github/workflows/ci.yml' }] },
+    contents: {},
+  });
+  const warnings = [];
+
+  const entries = await searchAndCollect({
+    tokens: ['tok1'],
+    workflows: ['prepare'],
+    fetchImpl,
+    log: { warn: (msg) => warnings.push(msg) },
+  });
+
+  assert.deepEqual(entries, [{ repo: 'org-c/private', path: '.github/workflows/ci.yml', manual: false, calls: [] }]);
+  assert.equal(warnings.length, 1);
+});
+
+test('mergeManual preserves manual entries and drops stale non-manual ones', () => {
+  const prev = [
+    { repo: 'x/manual', path: '.github/workflows/ci.yml', manual: true, calls: [{ workflow: 'prepare', inputs: [] }] },
+    { repo: 'x/stale', path: '.github/workflows/old.yml', manual: false, calls: [] },
+    { repo: 'x/found', path: '.github/workflows/ci.yml', manual: false, calls: [] },
+  ];
+  const next = [
+    { repo: 'x/found', path: '.github/workflows/ci.yml', manual: false, calls: [{ workflow: 'build', inputs: ['branch'] }] },
+  ];
+
+  const merged = mergeManual(prev, next);
+
+  assert.equal(merged.length, 2);
+  const found = merged.find((e) => e.repo === 'x/found');
+  assert.deepEqual(found.calls, [{ workflow: 'build', inputs: ['branch'] }], 'found entry updated to fresh data');
+  assert.ok(merged.some((e) => e.repo === 'x/manual' && e.manual === true), 'manual entry preserved');
+  assert.ok(!merged.some((e) => e.repo === 'x/stale'), 'stale non-manual entry dropped');
+});
+
+test('renderInventoryYaml produces the exact spec schema, sorted, with manual always present', () => {
+  const entries = [
+    { repo: 'org-b/second', path: '.github/workflows/ci.yml', manual: true, calls: [] },
+    {
+      repo: 'org-a/first',
+      path: '.github/workflows/release.yml',
+      manual: false,
+      calls: [
+        { workflow: 'prepare', inputs: ['base-branch', 'php-version'] },
+        { workflow: 'uploads', inputs: [] },
+      ],
+    },
+  ];
+
+  assert.equal(
+    renderInventoryYaml(entries, '2026-10-13'),
+    `# generated by tools/inventory.mjs — entries with \`manual: true\` are preserved
+# and merged on refresh; refresh via workflow_dispatch or schedule
+updated: '2026-10-13'
+consumers:
+  - repo: org-a/first
+    path: .github/workflows/release.yml
+    manual: false
+    calls:
+      - workflow: prepare
+        inputs: [base-branch, php-version]
+      - workflow: uploads
+        inputs: []
+  - repo: org-b/second
+    path: .github/workflows/ci.yml
+    manual: true
+    calls: []
+`,
+  );
+});
