@@ -209,7 +209,7 @@ function buildSection(file, files, allFiles) {
  * @returns {string}
  */
 export function renderImpactReport(model) {
-  if (model.noChanges) return 'No reusable workflow changes in this PR — no consumer impact to report.\n';
+  if (model.noChanges) return 'No breaking contract changes in this PR — no consumer impact to report.\n';
 
   /** @type {string[]} */
   const lines = [];

@@ -239,7 +239,7 @@ test('no reusable workflow changes yields the no-changes line', () => {
   assert.equal(empty.noChanges, true);
   assert.equal(
     renderImpactReport(empty),
-    'No reusable workflow changes in this PR — no consumer impact to report.\n',
+    'No breaking contract changes in this PR — no consumer impact to report.\n',
   );
 
   // internal-only changes (no contract on either side) are also no-changes
@@ -268,7 +268,7 @@ test('soft-only changes are silent: no section, no noImpact, noChanges true', ()
   assert.deepEqual(model.noImpact, []);
   assert.equal(model.noChanges, true);
   assert.equal(renderImpactReport(model),
-    'No reusable workflow changes in this PR — no consumer impact to report.\n');
+    'No breaking contract changes in this PR — no consumer impact to report.\n');
 });
 
 test('required tightening impacts consumers NOT passing the input', () => {
