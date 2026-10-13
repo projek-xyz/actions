@@ -91,7 +91,7 @@ jobs:
     - name: File to upload
       id: artifact-files
       if: |-
-        steps.release-version.outputs.result != '' && inputs.files == ''
+        steps.release-version.outputs.result != '' && inputs.files == '' &&
         (inputs.workflow-name != '' || inputs.workflow_name != '')
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
