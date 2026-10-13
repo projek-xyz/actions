@@ -1,0 +1,10 @@
+# Consumer entries for repos GitHub code search cannot see (private or hidden).
+# Merged into every inventory refresh by tools/inventory.mjs; entries here are
+# treated as manual by definition. Example:
+#   - repo: org/private-repo
+#     path: .github/workflows/deploy.yml
+#     calls:
+#       - workflow: prepare
+#         inputs: [php-version]
+#         outputs: [branch-name]
+consumers: []

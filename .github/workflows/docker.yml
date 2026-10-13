@@ -89,7 +89,7 @@ jobs:
           IMAGE_NAME: ${{ inputs.image-name }}
         run: |
           # Extract repository name and convert to lowercase
-          echo "lowercase=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "lowercase=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Download build artifact
         if: ${{ inputs.artifact-name != '' && inputs.artifact-path != '' }}

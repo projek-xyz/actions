@@ -1,0 +1,37 @@
+{
+  "workflow": "uploads",
+  "inputs": [
+    {
+      "name": "artifact_name",
+      "type": "string",
+      "required": false,
+      "default": "release-archives"
+    },
+    {
+      "name": "branch_name",
+      "type": "string",
+      "required": false,
+      "default": "main"
+    },
+    {
+      "name": "check_attempts",
+      "type": "number",
+      "required": false,
+      "default": 10
+    },
+    {
+      "name": "files",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "workflow_name",
+      "type": "string",
+      "required": false,
+      "default": ""
+    }
+  ],
+  "outputs": [],
+  "secrets": []
+}

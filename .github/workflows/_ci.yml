@@ -1,0 +1,264 @@
+name: Internal / CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install actionlint
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            | tar -xz -C "$RUNNER_TEMP" actionlint
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: actionlint
+        run: actionlint -color
+
+      - name: Check action pins
+        run: |
+          shellcheck tools/check-pins.sh
+          bash tools/check-pins.sh
+
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Check contracts
+        run: npm run contracts
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+  smoke-node:
+    name: Smoke (self / npm)
+    uses: ./.github/workflows/prepare.yml
+    permissions:
+      contents: read
+      pull-requests: write
+
+  smoke-php:
+    name: Smoke (fixture / php-laravel)
+    uses: ./.github/workflows/prepare.yml
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      project-ref: fixtures/prepare-php-laravel
+
+  smoke-bun:
+    name: Smoke (fixture / node-bun)
+    uses: ./.github/workflows/prepare.yml
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      project-ref: fixtures/prepare-node-bun
+
+  smoke-assert:
+    name: Smoke assertions
+    runs-on: ubuntu-latest
+    needs: [smoke-node, smoke-php, smoke-bun]
+
+    # !cancelled(): run on success AND failure. Without this the job inherits
+    # success() and is SKIPPED when a smoke leg fails — GitHub reports skipped
+    # jobs as 'Success', which would let this designated required check pass
+    # exactly when prepare.yml is broken.
+    if: ${{ !cancelled() }}
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Assert prepare outputs per variant
+        env:
+          SELF_NODE_RESULT: ${{ needs.smoke-node.result }}
+          PHP_RESULT: ${{ needs.smoke-php.result }}
+          BUN_RESULT: ${{ needs.smoke-bun.result }}
+          SELF_NEEDS_NODE: ${{ needs.smoke-node.outputs.needs-node }}
+          SELF_NEEDS_PNPM: ${{ needs.smoke-node.outputs.needs-pnpm }}
+          SELF_NEEDS_BUN: ${{ needs.smoke-node.outputs.needs-bun }}
+          SELF_PM_NAME: ${{ needs.smoke-node.outputs.node-pm-name }}
+          SELF_BRANCH_SLUG: ${{ needs.smoke-node.outputs.branch-slug }}
+          SELF_VERSION: ${{ needs.smoke-node.outputs.project-version }}
+          PHP_NEEDS_PHP: ${{ needs.smoke-php.outputs.needs-php }}
+          PHP_NEEDS_COMPOSER: ${{ needs.smoke-php.outputs.needs-composer }}
+          PHP_NEEDS_WPCLI: ${{ needs.smoke-php.outputs.needs-wpcli }}
+          PHP_IS_LARAVEL: ${{ needs.smoke-php.outputs.is-laravel }}
+          PHP_NEEDS_NODE: ${{ needs.smoke-php.outputs.needs-node }}
+          BUN_NEEDS_NODE: ${{ needs.smoke-bun.outputs.needs-node }}
+          BUN_NEEDS_BUN: ${{ needs.smoke-bun.outputs.needs-bun }}
+          BUN_PM_NAME: ${{ needs.smoke-bun.outputs.node-pm-name }}
+        run: |
+          fail=0
+          leg() {
+            local label="$1" actual="$2"
+            if [ "$actual" != "success" ]; then
+              echo "::error::${label}: expected 'success' outputs unavailable"
+              echo "- ❌ ${label}: result=${actual}" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            fi
+          }
+          leg "smoke-node" "$SELF_NODE_RESULT"
+          leg "smoke-php" "$PHP_RESULT"
+          leg "smoke-bun" "$BUN_RESULT"
+          if [ "$fail" -ne 0 ]; then
+            echo "A smoke leg failed — output assertions cannot run." >> "$GITHUB_STEP_SUMMARY"
+            exit $fail
+          fi
+
+          check() {
+            local label="$1" actual="$2" expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${label}: expected '${expected}', got '${actual}'"
+              echo "- ❌ ${label}: expected '${expected}', got '${actual}'" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            fi
+          }
+          check_nonempty() {
+            local label="$1" actual="$2"
+            if [ -z "$actual" ]; then
+              echo "::error::${label}: expected non-empty, got ''"
+              echo "- ❌ ${label}: expected non-empty, got ''" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            fi
+          }
+
+          # Self run (this repo is a Node/npm consumer project)
+          check "self.needs-node" "$SELF_NEEDS_NODE" "1"
+          check "self.needs-pnpm" "$SELF_NEEDS_PNPM" "0"
+          check "self.needs-bun" "$SELF_NEEDS_BUN" "0"
+          check "self.node-pm-name" "$SELF_PM_NAME" "npm"
+          check_nonempty "self.branch-slug" "$SELF_BRANCH_SLUG"
+          check_nonempty "self.project-version" "$SELF_VERSION"
+
+          # PHP fixture branch
+          check "php.needs-php" "$PHP_NEEDS_PHP" "1"
+          check "php.needs-composer" "$PHP_NEEDS_COMPOSER" "1"
+          check "php.needs-wpcli" "$PHP_NEEDS_WPCLI" "1"
+          check "php.is-laravel" "$PHP_IS_LARAVEL" "1"
+          check "php.needs-node" "$PHP_NEEDS_NODE" "0"
+
+          # Bun fixture branch
+          check "bun.needs-node" "$BUN_NEEDS_NODE" "1"
+          check "bun.needs-bun" "$BUN_NEEDS_BUN" "1"
+          check "bun.node-pm-name" "$BUN_PM_NAME" "bun"
+
+          exit $fail
+
+  impact:
+    name: Impact report
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    concurrency:
+      group: impact-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          # The job never pushes (the inventory is untracked scratch state and
+          # all git use is local reads), so nothing downstream — npm install
+          # lifecycle scripts included — should see persisted credentials.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm install
+
+      # Fresh inventory per run — the impact report is its only consumer.
+      # DEFAULT_PAT is step-scoped: it must not be present in the environment
+      # while `npm install` runs dependency lifecycle scripts. Failure is
+      # tolerated (continue-on-error) so the report still posts with the
+      # inventory-unavailable warning.
+      - name: Refresh consumer inventory
+        continue-on-error: true
+        env:
+          DEFAULT_PAT: ${{ secrets.DEFAULT_PAT }}
+        run: node tools/inventory.mjs
+
+      - name: Generate impact report
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node tools/impact-report.mjs --base "$BASE_REF"
+
+      - name: Upsert sticky impact comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- xyz-impact-report -->';
+            const content = fs.readFileSync('impact.md', 'utf8');
+            const body = `${marker}\nReport for commit \`${process.env.HEAD_SHA}\`\n\n${content}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

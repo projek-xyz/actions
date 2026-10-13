@@ -1,0 +1,75 @@
+{
+  "workflow": "configure",
+  "inputs": [
+    {
+      "name": "laravel-version",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "php-version",
+      "type": "string",
+      "required": false,
+      "default": null
+    },
+    {
+      "name": "target-env",
+      "type": "string",
+      "required": false,
+      "default": null
+    }
+  ],
+  "outputs": [
+    {
+      "name": "composer-cache-dir",
+      "description": ""
+    },
+    {
+      "name": "composer-cache-key",
+      "description": ""
+    },
+    {
+      "name": "has-codeclimate",
+      "description": "Deprecated"
+    },
+    {
+      "name": "has-coveralls",
+      "description": ""
+    },
+    {
+      "name": "image-tag",
+      "description": ""
+    },
+    {
+      "name": "repository-name",
+      "description": ""
+    },
+    {
+      "name": "should-deploy",
+      "description": ""
+    },
+    {
+      "name": "should-reports",
+      "description": ""
+    },
+    {
+      "name": "target-branch",
+      "description": ""
+    },
+    {
+      "name": "target-env",
+      "description": ""
+    }
+  ],
+  "secrets": [
+    {
+      "name": "CC_TEST_REPORTER_ID",
+      "required": false
+    },
+    {
+      "name": "COVERALLS_REPO_TOKEN",
+      "required": false
+    }
+  ]
+}

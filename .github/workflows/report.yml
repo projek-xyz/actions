@@ -34,7 +34,7 @@ jobs:
             HAS_COVERALLS=$([ -n "$COVERALLS_REPO_TOKEN" ] && echo "1" || echo "0")
           fi
 
-          echo "has-coveralls=$HAS_COVERALLS" >> $GITHUB_OUTPUT
+          echo "has-coveralls=$HAS_COVERALLS" >> "$GITHUB_OUTPUT"
 
   coveralls:
     name: Upload to Coveralls
