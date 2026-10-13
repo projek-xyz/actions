@@ -140,7 +140,7 @@ jobs:
         id: check
         run: |
           if [ -f ".github/labeler.yml" ] || [ -f ".github/labeler.yaml" ]; then
-            echo "should-label=1" >> $GITHUB_OUTPUT
+            echo "should-label=1" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Labeler
@@ -212,20 +212,20 @@ jobs:
           NEEDS_WPCLI=$(test -f ./wp-cli.yml && echo 1 || echo 0)
           PHP_TOOLS=
 
-          # Whether the repository has composer.json
-          echo "needs-composer=$(test -f ./composer.json && echo 1 || echo 0)" >> $GITHUB_OUTPUT
-
-          # Whether the repository has wp-cli.yml
-          echo "needs-wpcli=${NEEDS_WPCLI}" >> $GITHUB_OUTPUT
-
-          # Whether the repository is a laravel project
-          echo "is-laravel=$(test -x ./artisan && echo 1 || echo 0)" >> $GITHUB_OUTPUT
+          # Whether the repository has composer.json / wp-cli.yml / is a laravel project
+          {
+            echo "needs-composer=$(test -f ./composer.json && echo 1 || echo 0)"
+            echo "needs-wpcli=${NEEDS_WPCLI}"
+            echo "is-laravel=$(test -x ./artisan && echo 1 || echo 0)"
+          } >> "$GITHUB_OUTPUT"
 
           if [[ $NEEDS_COMPOSER -eq 1 ]]; then PHP_TOOLS="${PHP_TOOLS:+$PHP_TOOLS,}composer"; fi
           if [[ $NEEDS_WPCLI -eq 1 ]]; then PHP_TOOLS="${PHP_TOOLS:+$PHP_TOOLS,}wp-cli"; fi
 
-          echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)" >> $GITHUB_OUTPUT
-          echo "php-tools=${PHP_TOOLS}" >> $GITHUB_OUTPUT
+          {
+            echo "needs-php=$([ -n "$PHP_TOOLS" ] && echo 1 || echo 0)"
+            echo "php-tools=${PHP_TOOLS}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Node Requirements
         id: node
@@ -251,6 +251,7 @@ jobs:
             pkg_namager=$(jq -r '.packageManager // ""' package.json)
 
             if [[ -n $pkg_namager ]]; then
+              # shellcheck disable=SC2206 # intentional word split: "bun@1.3.10" -> (bun 1.3.10)
               arr=(${pkg_namager//@/ })
 
               PM_NAME=${arr[0]}
@@ -258,11 +259,13 @@ jobs:
             fi
           fi
 
-          echo "needs-node=$NEEDS_NODE" >> $GITHUB_OUTPUT
-          echo "needs-pnpm=$NEEDS_PNPM" >> $GITHUB_OUTPUT
-          echo "needs-bun=$NEEDS_BUN" >> $GITHUB_OUTPUT
-          echo "pm-name=$PM_NAME" >> $GITHUB_OUTPUT
-          echo "pm-version=$PM_VERSION" >> $GITHUB_OUTPUT
+          {
+            echo "needs-node=$NEEDS_NODE"
+            echo "needs-pnpm=$NEEDS_PNPM"
+            echo "needs-bun=$NEEDS_BUN"
+            echo "pm-name=$PM_NAME"
+            echo "pm-version=$PM_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Project
         id: project
@@ -272,17 +275,17 @@ jobs:
           BASE_BRANCH: ${{ inputs.base-branch }}
         run: |
           # Extract repository name and convert to lowercase
-          REPO_NAME=$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]')
+          REPO_NAME=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
 
           # Extract repository branch name
           BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
 
           # Extract branch slug
-          BRANCH_SLUG=$(echo $BRANCH_NAME | sed 's#/#_#g; s#\[##g; s#\]##g')
+          BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's#/#_#g; s#\[##g; s#\]##g')
           BRANCH_SLUG=${BRANCH_SLUG:0:20}.${GITHUB_SHA:0:8}
 
           COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
-          FOR_RELEASE=$([[ $COMMIT_TITLE =~ "chore(release)" ]] && echo "1" || echo "0")
+          FOR_RELEASE=$([[ $COMMIT_TITLE =~ chore\(release\) ]] && echo "1" || echo "0")
 
           PR_NUMBER=$([[ $BRANCH_NAME =~ "/merge" ]] && echo "${BRANCH_NAME//\/merge/}" || echo "")
           APP_VERSION=$BRANCH_SLUG
@@ -306,14 +309,15 @@ jobs:
             APP_VERSION=${GITHUB_REF#refs/tags/}
           fi
 
-          echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
-
-          echo "repo-name=$REPO_NAME" >> $GITHUB_OUTPUT
-          echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          echo "branch-slug=$BRANCH_SLUG" >> $GITHUB_OUTPUT
-          echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "base-branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
-          echo "commit-title=$COMMIT_TITLE" >> $GITHUB_OUTPUT
+          {
+            echo "version=$APP_VERSION"
+            echo "repo-name=$REPO_NAME"
+            echo "branch-name=$BRANCH_NAME"
+            echo "branch-slug=$BRANCH_SLUG"
+            echo "pr-number=$PR_NUMBER"
+            echo "base-branch=$BASE_BRANCH"
+            echo "commit-title=$COMMIT_TITLE"
+          } >> "$GITHUB_OUTPUT"
 
           # Prepare for `previous-run` and `changed-files` step
           cp -r .github/xyz-actions/.github/scripts .github/
@@ -334,11 +338,11 @@ jobs:
           NEEDS_WPCLI: ${{ steps.php.outputs.needs-wpcli }}
         run: |
           if [[ $NEEDS_COMPOSER -eq 1 ]]; then
-            echo "composer-dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+            echo "composer-dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
           fi
 
           if [[ $NEEDS_WPCLI -eq 1 ]]; then
-            echo "wpcli-dir=$(wp cli info --format=json | jq -r '.wp_cli_cache_dir_path')" >> $GITHUB_OUTPUT
+            echo "wpcli-dir=$(wp cli info --format=json | jq -r '.wp_cli_cache_dir_path')" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Reports
@@ -350,16 +354,16 @@ jobs:
           SHOULD_REPORTS=0
 
           if [[ -n "${CODECOV_TOKEN}" ]]; then
-            echo "has-codecov=1" >> $GITHUB_OUTPUT;
+            echo "has-codecov=1" >> "$GITHUB_OUTPUT";
             SHOULD_REPORTS=1
           fi
 
           if [[ -n "${COVERALLS_REPO_TOKEN}" ]]; then
-            echo "has-coveralls=1" >> $GITHUB_OUTPUT;
+            echo "has-coveralls=1" >> "$GITHUB_OUTPUT";
             SHOULD_REPORTS=1
           fi
 
-          echo "should-reports=${SHOULD_REPORTS}" >> $GITHUB_OUTPUT
+          echo "should-reports=${SHOULD_REPORTS}" >> "$GITHUB_OUTPUT"
 
       - name: Previous workflow run
         id: previous-run

@@ -15,6 +15,9 @@ on:
       composer-cache-dir:
         required: true
         type: string
+      php-version:
+        default: '8.2'
+        type: string
       composer-cache-key:
         default: php-${{ inputs.php-version }}
         type: string
@@ -23,9 +26,6 @@ on:
         type: string
       node-pm-version:
         required: true
-        type: string
-      php-version:
-        default: '8.2'
         type: string
       sentry-project:
         required: false
@@ -120,10 +120,10 @@ jobs:
               ;;
           esac
 
-          echo "NODE_PM_NAME=$NODE_PM_NAME" >> $GITHUB_ENV
+          echo "NODE_PM_NAME=$NODE_PM_NAME" >> "$GITHUB_ENV"
           [[ -f .github/.env.example ]] && cp .github/.env.example .env
           composer update --prefer-dist --no-scripts --no-interaction --no-progress --ansi
-          echo "generated-key=$(php artisan key:generate --show)" >> $GITHUB_OUTPUT
+          echo "generated-key=$(php artisan key:generate --show)" >> "$GITHUB_OUTPUT"
           touch database/database.sqlite
 
       - name: Dump Autoload
@@ -137,7 +137,7 @@ jobs:
         env:
           BRANCH: ${{ inputs.branch }}
         run: |
-          composer dep deploy:info env=$APP_ENV -- --branch $BRANCH
+          composer dep deploy:info env="$APP_ENV" -- --branch "$BRANCH"
 
       - name: Build frontend
         env:

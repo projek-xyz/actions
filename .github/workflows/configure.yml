@@ -65,7 +65,7 @@ jobs:
         id: check
         run: |
           if [ -f ".github/labeler.yml" ] || [ -f ".github/labeler.yaml" ]; then
-            echo "should-label=1" >> $GITHUB_OUTPUT
+            echo "should-label=1" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Labeler
@@ -102,20 +102,20 @@ jobs:
         env:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
         run: |
-          if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> $GITHUB_OUTPUT; fi
+          if ! [ -z "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> "$GITHUB_OUTPUT"; fi
 
       - name: Repository
         id: repo
         run: |
           # Extract repository name and convert to lowercase
-          echo "lower-name=$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "lower-name=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
           # Extract repository branch name
-          echo "branch-name=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+          echo "branch-name=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> "$GITHUB_OUTPUT"
 
           if [ -f ./package.json ]; then
             # Extract version number from `package.json` file
-            echo "app-version=$(cat package.json | jq -r '.version')" >> $GITHUB_OUTPUT
+            echo "app-version=$(cat package.json | jq -r '.version')" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Environment
@@ -126,15 +126,16 @@ jobs:
           COVERALLS: ${{ steps.reports.outputs.has-coveralls }}
           PHP_VERSION: ${{ inputs.php-version }}
         run: |
+          # shellcheck disable=SC2153 # APP_VERSION comes from step env (YAML), not a shell assignment
           # Generate image tag with timestamp and commit
-          echo "image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
           if [ "$COVERALLS" == '1' ]; then
-            echo "should-reports=1" >> $GITHUB_OUTPUT;
+            echo "should-reports=1" >> "$GITHUB_OUTPUT";
           fi
 
           if ! [ -z "${PHP_VERSION}" ]; then
-            echo "has-php=1" >> $GITHUB_OUTPUT;
+            echo "has-php=1" >> "$GITHUB_OUTPUT";
           fi
 
       - name: Deploy
@@ -147,15 +148,15 @@ jobs:
           DEPLOYABLE=0
 
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "target-env=${TARGET_ENV}" >> $GITHUB_OUTPUT
+            echo "target-env=${TARGET_ENV}" >> "$GITHUB_OUTPUT"
             DEPLOYABLE=1
           elif [[ "$BRANCH_NAME" == "main" ]]; then
-            echo "target-env=develop" >> $GITHUB_OUTPUT
+            echo "target-env=develop" >> "$GITHUB_OUTPUT"
           else
-            echo "target-env=staging" >> $GITHUB_OUTPUT
+            echo "target-env=staging" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "should-deploy=$DEPLOYABLE" >> $GITHUB_OUTPUT
+          echo "should-deploy=$DEPLOYABLE" >> "$GITHUB_OUTPUT"
 
       - name: Setup PHP
         if: steps.environment.outputs.has-php == '1'
@@ -180,5 +181,5 @@ jobs:
             COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"
           fi
 
-          echo "composer-cache-dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-          echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> $GITHUB_OUTPUT
+          echo "composer-cache-dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+          echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> "$GITHUB_OUTPUT"

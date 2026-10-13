@@ -52,7 +52,7 @@ jobs:
         RELEASE_VERSION=$(echo "$LATEST_COMMIT" | head -n 1 | sed 's/chore(release): /v/')
 
         if [[ "$RELEASE_VERSION" == "$GITHUB_REF_NAME" ]]; then
-          echo "result=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+          echo "result=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -75,7 +75,7 @@ jobs:
           exit 0
         fi
 
-        echo "result=$RESULT" >> $GITHUB_OUTPUT
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
 
     - name: File to upload
       id: artifact-files
@@ -172,7 +172,7 @@ jobs:
 
         shopt -s nullglob
 
-        echo "::debug::files: ${files[@]}"
+        echo "::debug::files: ${files[*]}"
 
         for file in "${files[@]}"; do
           file=$(echo "$file" | xargs)
@@ -186,6 +186,7 @@ jobs:
           echo "::group::Uploading '$file_name'..."
           (
             IFS=''
+            # shellcheck disable=SC2206 # intentional word split of a single glob string
             files=($file)
             if [[ ${#files[@]} -eq 0 ]]; then
               echo "Skipping: '$file', file not found"
