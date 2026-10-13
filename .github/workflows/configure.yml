@@ -6,13 +6,13 @@ on:
   workflow_call:
     inputs:
       php-version:
-        required: false
+        default: ${{ vars.PHP_VERSION || '8.2' }}
         type: string
       laravel-version:
         required: false
         type: string
       target-env:
-        required: false
+        default: testing
         type: string
     secrets:
       CC_TEST_REPORTER_ID:

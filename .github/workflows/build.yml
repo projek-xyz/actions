@@ -15,6 +15,10 @@ on:
       composer-cache-dir:
         required: true
         type: string
+      composer-cache-key:
+        description: '[Deprecated] this input is no longer in use'
+        default: php-${{ vars.PHP_VERSION || '8.2' }}
+        type: string
       php-version:
         default: ${{ vars.PHP_VERSION || '8.2' }}
         type: string
