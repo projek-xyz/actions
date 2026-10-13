@@ -41,6 +41,7 @@ yarn.lock
 .antigravitycli
 .gemini
 conductor
+AGENTS.md
 GEMINI.md
 
 # IDE Project Configurations
