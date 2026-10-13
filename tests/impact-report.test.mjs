@@ -98,10 +98,9 @@ test('analyzeChanges buckets workflows by removals and filters consumers by over
   assert.equal(model.inventoryEmpty, false);
   assert.equal(model.noChanges, false);
   assert.deepEqual(model.noImpact, ['docker.yml']);
-  assert.deepEqual(model.nonRemovalBreaking, ['prepare.yml']);
   assert.deepEqual(model.introduced, ['new-flow.yml']);
 
-  assert.equal(model.sections.length, 1);
+  assert.equal(model.sections.length, 2);
   const [section] = model.sections;
   assert.equal(section.file, 'build.yml');
   assert.equal(section.status, 'impacted');
@@ -114,6 +113,18 @@ test('analyzeChanges buckets workflows by removals and filters consumers by over
     {
       repo: 'projek-xyz/laravel-starter',
       files: [{ path: '.github/workflows/main.yml', passes: ['uploads-path'], reads: ['image-url'] }],
+    },
+  ]);
+
+  // hard non-removal (prepare's type change) is a CAUTION section now, not a pointer line
+  const [, prepare] = model.sections;
+  assert.equal(prepare.file, 'prepare.yml');
+  assert.equal(prepare.status, 'impacted');
+  assert.equal(prepare.consumerCount, 1);
+  assert.deepEqual(prepare.impacted, [
+    {
+      repo: 'creasico/laravel-nusa',
+      files: [{ path: '.github/workflows/deploy.yml', passes: ['php-version'], reads: [] }],
     },
   ]);
 });
@@ -139,7 +150,15 @@ Impacted consumers (2 of 3):
 - \`projek-xyz/laravel-starter\`:
   - \`main.yml\` — passes: \`uploads-path\`; reads: \`image-url\`
 
-Changed with non-removal interface changes (see the Contracts job): \`prepare.yml\`
+### \`prepare.yml\`
+
+> [!CAUTION]
+> This PR changes the \`workflow_call\` interface of \`prepare.yml\`; the contract baseline and diff show what changed. The consumers below still use the old interface.
+
+Impacted consumers (1 of 1):
+- \`creasico/laravel-nusa\`:
+  - \`deploy.yml\` — passes: \`php-version\`
+
 Changed with no interface impact: \`docker.yml\`
 Baseline introduced in this PR (nothing to compare): \`new-flow.yml\`
 `,
@@ -205,7 +224,7 @@ test('empty inventory flags the report and renders clean sections', () => {
 ### \`build.yml\`
 
 > [!NOTE]
-> Interface changed, but no recorded consumer uses the removed items.
+> Interface changed, but no recorded consumer is affected.
 `,
   );
 });
@@ -231,4 +250,74 @@ test('no reusable workflow changes yields the no-changes line', () => {
     inventory: MIXED_INVENTORY,
   });
   assert.equal(internalOnly.noChanges, true);
+});
+
+test('soft-only changes are silent: no section, no noImpact, noChanges true', () => {
+  const model = analyzeChanges({
+    changedFiles: ['.github/workflows/prepare.yml'],
+    baseContracts: new Map([['prepare', contract(['php-version'], [])]]),
+    currentContracts: new Map([['prepare', {
+      workflow: 'x',
+      inputs: [{ name: 'php-version', type: 'string', required: false, default: '8.2' }],
+      outputs: [], secrets: [],
+    }]]),
+    inventory: MIXED_INVENTORY,
+  });
+
+  assert.deepEqual(model.sections, []);
+  assert.deepEqual(model.noImpact, []);
+  assert.equal(model.noChanges, true);
+  assert.equal(renderImpactReport(model),
+    'No reusable workflow changes in this PR — no consumer impact to report.\n');
+});
+
+test('required tightening impacts consumers NOT passing the input', () => {
+  const model = analyzeChanges({
+    changedFiles: ['.github/workflows/prepare.yml'],
+    baseContracts: new Map([['prepare', contract(['token'], [])]]),
+    currentContracts: new Map([['prepare', {
+      workflow: 'x',
+      inputs: [{ name: 'token', type: 'string', required: true, default: null }],
+      outputs: [], secrets: [],
+    }]]),
+    inventory: [
+      { repo: 'org/with', path: '.github/workflows/a.yml', manual: false,
+        calls: [{ workflow: 'prepare', inputs: ['token'], outputs: [] }] },
+      { repo: 'org/without', path: '.github/workflows/b.yml', manual: false,
+        calls: [{ workflow: 'prepare', inputs: [], outputs: [] }] },
+    ],
+  });
+
+  const [section] = model.sections;
+  assert.equal(section.status, 'impacted');
+  assert.deepEqual(section.impacted, [
+    { repo: 'org/without', files: [{ path: '.github/workflows/b.yml', passes: [], reads: [] }] },
+  ]);
+});
+
+test('hard secret-only change CAUTIONs every recorded consumer', () => {
+  const model = analyzeChanges({
+    changedFiles: ['.github/workflows/prepare.yml'],
+    baseContracts: new Map([['prepare', {
+      workflow: 'x', inputs: [],
+      outputs: [],
+      secrets: [{ name: 'deploy-key', required: false }],
+    }]]),
+    currentContracts: new Map([['prepare', {
+      workflow: 'x', inputs: [],
+      outputs: [],
+      secrets: [{ name: 'deploy-key', required: true }],
+    }]]),
+    inventory: [
+      { repo: 'org/a', path: '.github/workflows/a.yml', manual: false,
+        calls: [{ workflow: 'prepare', inputs: [], outputs: [] }] },
+      { repo: 'org/b', path: '.github/workflows/b.yml', manual: false,
+        calls: [{ workflow: 'prepare', inputs: [], outputs: [] }] },
+    ],
+  });
+
+  const [section] = model.sections;
+  assert.equal(section.status, 'impacted');
+  assert.equal(section.impacted.length, 2);
+  assert.match(renderImpactReport(model), /> \[!CAUTION\]/);
 });

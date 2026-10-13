@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { diffContracts } from '../tools/check-contracts.mjs';
+import { diffContracts, isBreakingChange } from '../tools/check-contracts.mjs';
 
 function contract(inputs = [], outputs = [], secrets = []) {
   return { workflow: 'x', inputs, outputs, secrets };
@@ -30,11 +30,11 @@ test('changes carries structured kind/name/change entries in message order', () 
 
   assert.deepEqual(diffContracts(base, curr).changes, [
     { kind: 'input', name: 'gone', change: 'removed' },
-    { kind: 'input', name: 't', change: 'changed' },
+    { kind: 'input', name: 't', change: 'retyped' },
     { kind: 'input', name: 'r', change: 'relaxed' },
     { kind: 'input', name: 'added', change: 'added' },
     { kind: 'output', name: 'out-gone', change: 'removed' },
-    { kind: 'secret', name: 's-new', change: 'changed' },
+    { kind: 'secret', name: 's-new', change: 'tightened' },
   ]);
 });
 
@@ -45,15 +45,35 @@ test('removed input is breaking', () => {
   assert.deepEqual(diffContracts(base, curr).breaking, ['input removed: php-version']);
 });
 
-test('type change, default change and required false->true are breaking', () => {
+test('type change and required false->true are breaking; default change is soft', () => {
   const base = contract([input('t', { type: 'string' }), input('d', { def: '1' }), input('r')]);
   const curr = contract([input('t', { type: 'boolean' }), input('d', { def: '2' }), input('r', { required: true })]);
 
-  assert.deepEqual(diffContracts(base, curr).breaking, [
-    'input changed: t',
-    'input changed: d',
-    'input changed: r',
-  ]);
+  const diff = diffContracts(base, curr);
+  assert.deepEqual(diff.breaking, ['input changed: t', 'input changed: r']);
+  assert.deepEqual(diff.additions, ['input changed: d']);
+});
+
+test("optional no-default <-> default:'' swap produces no breaking rows", () => {
+  const base = contract([input('input-one'), input('input-two', { def: '' })]);
+  const curr = contract([input('input-one', { def: '' }), input('input-two')]);
+
+  const diff = diffContracts(base, curr);
+  assert.deepEqual(diff.breaking, []);
+  assert.deepEqual(diff.additions, ['input changed: input-one', 'input changed: input-two']);
+});
+
+test('added input or secret with required: true is breaking; optional additions stay soft', () => {
+  const base = contract([], [], []);
+  const curr = contract(
+    [input('need', { required: true }), input('want')],
+    [],
+    [{ name: 'tok', required: true }, { name: 'open', required: false }],
+  );
+
+  const diff = diffContracts(base, curr);
+  assert.deepEqual(diff.breaking, ['input added: need', 'secret added: tok']);
+  assert.deepEqual(diff.additions, ['input added: want', 'secret added: open']);
 });
 
 test('required true->false is an addition-class relaxation, not breaking', () => {
@@ -88,4 +108,11 @@ test('secret required changes follow the same relaxation rules', () => {
   const result = diffContracts(base, curr);
   assert.deepEqual(result.breaking, ['secret changed: tightened']);
   assert.deepEqual(result.additions, ['secret relaxed: relaxed']);
+});
+
+test('isBreakingChange recognizes only the hard kinds', () => {
+  const hard = ['removed', 'retyped', 'tightened', 'added-required'];
+  const soft = ['default-changed', 'relaxed', 'added'];
+  for (const change of hard) assert.equal(isBreakingChange({ kind: 'input', name: 'x', change }), true, change);
+  for (const change of soft) assert.equal(isBreakingChange({ kind: 'input', name: 'x', change }), false, change);
 });
