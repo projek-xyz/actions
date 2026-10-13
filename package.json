@@ -8,6 +8,9 @@
     "type": "git",
     "url": "git+https://github.com/projek-xyz/actions.git"
   },
+  "scripts": {
+    "test": "node --test 'tests/**/*.test.mjs'"
+  },
   "devDependencies": {
     "@actions/github-script": "github:actions/github-script"
   }
