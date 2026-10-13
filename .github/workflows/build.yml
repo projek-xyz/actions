@@ -18,9 +18,9 @@ on:
       php-version:
         default: '8.2'
         type: string
-      # composer-cache-key:
-      #   default: php-${{ inputs.php-version }}
-      #   type: string
+      composer-cache-key:
+        default: php-${{ inputs.php-version }}
+        type: string
       node-pm-name:
         required: true
         type: string
