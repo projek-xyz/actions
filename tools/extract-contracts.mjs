@@ -44,10 +44,18 @@ export function extractCallContract(yamlText, workflow = '') {
   const doc = /** @type {any} */ (load(yamlText)) ?? {};
   // `on` is a string key under YAML 1.2 (js-yaml default schema), but be
   // defensive about boolean-key parsing quirks.
-  /** @type {Record<string, any>|undefined} */
-  const on = doc.on ?? doc[true];
+  const raw = doc.on ?? doc[true];
+  // Normalize the scalar (`on: workflow_call`) and sequence
+  // (`on: [push, workflow_call]`) forms to the mapping form. Without this,
+  // `'workflow_call' in <string>` throws an opaque TypeError.
+  const on =
+    raw === 'workflow_call'
+      ? { workflow_call: {} }
+      : Array.isArray(raw)
+        ? Object.fromEntries(raw.map((k) => [String(k), {}]))
+        : raw;
 
-  if (!on || !('workflow_call' in on)) {
+  if (!on || typeof on !== 'object' || !('workflow_call' in on)) {
     return null;
   }
 

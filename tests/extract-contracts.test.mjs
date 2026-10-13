@@ -83,6 +83,20 @@ test('bare workflow_call yields a contract with empty arrays, not null', () => {
   assert.deepEqual(contract.secrets, []);
 });
 
+test('scalar and sequence on: forms are normalized instead of throwing', () => {
+  const scalar = extractCallContract('name: X\non: workflow_call\n', 'scalar-form');
+  assert.ok(scalar);
+  assert.equal(scalar.workflow, 'scalar-form');
+  assert.deepEqual(scalar.inputs, []);
+
+  const sequence = extractCallContract('name: Y\non: [push, workflow_call]\n', 'sequence-form');
+  assert.ok(sequence);
+  assert.deepEqual(sequence.inputs, []);
+
+  assert.equal(extractCallContract('name: Z\non: [push]\n'), null, 'sequence without workflow_call');
+  assert.equal(extractCallContract('name: W\non: push\n'), null, 'scalar non-callable trigger');
+});
+
 test('workflow without workflow_call returns null', () => {
   assert.equal(extractCallContract(FIXTURE_NO_CALL), null);
 });
