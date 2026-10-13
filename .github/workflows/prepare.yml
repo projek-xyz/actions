@@ -296,7 +296,7 @@ jobs:
           APP_VERSION=$BRANCH_SLUG
 
           PKG_VERSION=
-          if [[ $HAS_NODE -eq 1 ]]; then PKG_VERSION=$(jq -r '.version | ""' package.json); fi
+          if [[ $HAS_NODE -eq 1 ]]; then PKG_VERSION=$(jq -r '.version // ""' package.json); fi
 
           if [[ -n $PKG_VERSION ]]; then
             APP_VERSION="${PKG_VERSION}-${APP_VERSION}"
