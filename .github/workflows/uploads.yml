@@ -8,7 +8,7 @@ on:
         required: false
         type: string
         default: ''
-      artifact_name:
+      artifact-name:
         description: Name of the artifact to download
         required: false
         type: string
