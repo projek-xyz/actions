@@ -120,17 +120,19 @@ export function renderInventoryYaml(entries, updated) {
 
 /**
  * Code-search every token for call sites of each workflow, then fetch and
- * parse each unique hit. Individual search/content failures are logged and
- * skipped — the union across tokens makes single failures tolerable.
+ * parse each unique hit. Search failures are logged and skipped (callers get
+ * every other query's results via `onSearchFailure`), and content fetches try
+ * each token in turn before giving up.
  *
  * @param {object} options
  * @param {string[]} options.tokens
  * @param {string[]} options.workflows workflow names without extension
  * @param {typeof fetch} [options.fetchImpl]
  * @param {{ warn: (msg: string) => void }} [options.log]
+ * @param {() => void} [options.onSearchFailure] called once per failed search request
  * @returns {Promise<Entry[]>}
  */
-export async function searchAndCollect({ tokens, workflows, fetchImpl = fetch, log = console }) {
+export async function searchAndCollect({ tokens, workflows, fetchImpl = fetch, log = console, onSearchFailure }) {
   const headers = (/** @type {string} */ token, /** @type {string} */ accept) => ({
     Authorization: `Bearer ${token}`,
     Accept: accept,
@@ -149,6 +151,7 @@ export async function searchAndCollect({ tokens, workflows, fetchImpl = fetch, l
       const res = await fetchImpl(url.toString(), { headers: headers(token, 'application/vnd.github+json') });
       if (!res.ok) {
         log.warn(`code search failed for ${name}: HTTP ${res.status} — skipped`);
+        onSearchFailure?.();
         continue;
       }
       const data = /** @type {{ items?: { repository?: { full_name?: string }, path?: string }[] }} */ (
@@ -166,17 +169,22 @@ export async function searchAndCollect({ tokens, workflows, fetchImpl = fetch, l
   /** @type {Entry[]} */
   const entries = [];
   for (const entry of hits.values()) {
-    try {
-      const res = await fetchImpl(`${API}/repos/${entry.repo}/contents/${entry.path}`, {
-        headers: headers(tokens[0], 'application/vnd.github.raw'),
-      });
-      if (res.ok) {
-        entry.calls = parseCallSites(await res.text(), entry.path);
-      } else {
-        log.warn(`could not fetch ${entry.repo}/${entry.path}: HTTP ${res.status} — keeping with calls: []`);
+    for (let i = 0; i < tokens.length; i += 1) {
+      const isLast = i === tokens.length - 1;
+      const status = (/** @type {string} */ detail) =>
+        isLast ? `${detail} — keeping with calls: []` : `${detail} — trying next token`;
+      try {
+        const res = await fetchImpl(`${API}/repos/${entry.repo}/contents/${entry.path}`, {
+          headers: headers(tokens[i], 'application/vnd.github.raw'),
+        });
+        if (res.ok) {
+          entry.calls = parseCallSites(await res.text(), entry.path);
+          break;
+        }
+        log.warn(`could not fetch ${entry.repo}/${entry.path}: ${status(`HTTP ${res.status}`)}`);
+      } catch (err) {
+        log.warn(`could not fetch ${entry.repo}/${entry.path}: ${status(String(err))}`);
       }
-    } catch (err) {
-      log.warn(`could not fetch ${entry.repo}/${entry.path}: ${String(err)} — keeping with calls: []`);
     }
     entries.push(entry);
   }
@@ -227,8 +235,26 @@ async function main() {
   }
 
   const workflows = listWorkflowFiles('.github/workflows').map((f) => f.replace(/\.ya?ml$/, ''));
-  const next = await searchAndCollect({ tokens, workflows, fetchImpl: fetch, log: console });
+  let searchFailures = 0;
+  const next = await searchAndCollect({
+    tokens,
+    workflows,
+    fetchImpl: fetch,
+    log: console,
+    onSearchFailure: () => {
+      searchFailures += 1;
+    },
+  });
   const prev = readPrevEntries('consumers.yml');
+
+  // Partial-failure guard: a single failed search silently drops every
+  // consumer that query would have found, and mergeManual would then discard
+  // their previous entries. Refuse to write — a failed refresh must not
+  // shrink a working inventory.
+  if (searchFailures > 0) {
+    console.error(`${searchFailures} code search request(s) failed — refusing to write a partial inventory; consumers.yml kept.`);
+    process.exit(1);
+  }
 
   // Total-failure guard: if the previous inventory had found entries but this
   // run found nothing, the searches most likely failed wholesale — do not
@@ -241,7 +267,23 @@ async function main() {
 
   const merged = mergeManual(prev, next);
   const updated = new Date().toISOString().slice(0, 10);
-  writeFileSync('consumers.yml', renderInventoryYaml(merged, updated));
+  const rendered = renderInventoryYaml(merged, updated);
+
+  // Skip the write when only the `updated:` date would change, so weekly
+  // no-change refreshes don't commit one-line date churn.
+  const contentOnly = (/** @type {string} */ text) =>
+    text
+      .split('\n')
+      .filter((line) => !line.startsWith('updated:'))
+      .join('\n')
+      .trim();
+  const prevText = existsSync('consumers.yml') ? readFileSync('consumers.yml', 'utf8') : '';
+  if (contentOnly(prevText) === contentOnly(rendered)) {
+    console.log('consumers.yml unchanged — skipping write');
+    return;
+  }
+
+  writeFileSync('consumers.yml', rendered);
   console.log(`wrote consumers.yml (${merged.length} entries: ${next.length} found, ${merged.length - next.length} manual)`);
 }
 

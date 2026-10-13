@@ -126,6 +126,42 @@ test('searchAndCollect keeps the entry with calls: [] when content fetch fails',
   assert.equal(warnings.length, 1);
 });
 
+test('searchAndCollect retries content fetch with the next token before giving up', async () => {
+  let contentAttempts = 0;
+  /** @param {string} url @param {{ headers?: Record<string, string> }} [options] */
+  const fetchImpl = async (url, options = {}) => {
+    const token = String(options.headers?.Authorization ?? '');
+    if (url.includes('/search/code')) {
+      const items =
+        token.includes('tok1') && url.includes('prepare.yml')
+          ? [{ repository: { full_name: 'org-d/two-tokens' }, path: '.github/workflows/ci.yml' }]
+          : [];
+      return { ok: true, status: 200, json: async () => ({ items }) };
+    }
+    if (url.includes('/contents/')) {
+      contentAttempts += 1;
+      if (token.includes('tok1')) return { ok: false, status: 403, json: async () => ({}), text: async () => '' };
+      return { ok: true, status: 200, json: async () => ({}), text: async () => CONSUMER_RELEASE_YAML };
+    }
+    throw new Error(`unexpected url: ${url}`);
+  };
+
+  const warnings = [];
+  const entries = await searchAndCollect({
+    tokens: ['tok1', 'tok2'],
+    workflows: ['prepare'],
+    fetchImpl: /** @type {any} */ (fetchImpl),
+    log: { warn: (msg) => warnings.push(msg) },
+  });
+
+  assert.equal(contentAttempts, 2, 'first token 403 → second token tried');
+  assert.deepEqual(entries, [
+    { repo: 'org-d/two-tokens', path: '.github/workflows/ci.yml', manual: false, calls: [{ workflow: 'uploads', inputs: [] }] },
+  ]);
+  assert.equal(warnings.length, 1, 'one warning for the failed token, none after success');
+  assert.ok(warnings[0].includes('trying next token'));
+});
+
 test('mergeManual preserves manual entries and drops stale non-manual ones', () => {
   const prev = [
     { repo: 'x/manual', path: '.github/workflows/ci.yml', manual: true, calls: [{ workflow: 'prepare', inputs: [] }] },
