@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 jobs:
@@ -154,3 +156,93 @@ jobs:
           check "bun.node-pm-name" "$BUN_PM_NAME" "bun"
 
           exit $fail
+
+  impact:
+    name: Impact report
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    concurrency:
+      group: impact-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate impact report
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node tools/impact-report.mjs --base "$BASE_REF"
+
+      - name: Upsert sticky impact comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- xyz-impact-report -->';
+            const content = fs.readFileSync('impact.md', 'utf8');
+            const body = `${marker}\nReport for commit \`${process.env.HEAD_SHA}\`\n\n${content}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+  inventory-refresh:
+    name: Inventory refresh
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    env:
+      DEFAULT_PAT: ${{ secrets.DEFAULT_PAT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Rebuild consumer inventory
+        run: node tools/inventory.mjs
+
+      - name: Commit refreshed inventory
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add consumers.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(consumers): refresh inventory"
+          git push
