@@ -87,6 +87,92 @@ function makeFetch({ searches, contents }) {
   };
 }
 
+test('searchAndCollect paginates code search past the first 100 results', async () => {
+  const pageOne = Array.from({ length: 100 }, (_, i) => ({
+    repository: { full_name: `org/p${i}` },
+    path: '.github/workflows/ci.yml',
+  }));
+  const pageTwo = Array.from({ length: 30 }, (_, i) => ({
+    repository: { full_name: `org/q${i}` },
+    path: '.github/workflows/ci.yml',
+  }));
+  let lastPage = '0';
+  const warnings = [];
+  const fetchImpl = async (/** @type {string} */ url) => {
+    if (url.includes('/search/code')) {
+      const page = new URL(url).searchParams.get('page') ?? '1';
+      lastPage = page;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          total_count: 130,
+          incomplete_results: false,
+          items: page === '1' ? pageOne : pageTwo,
+        }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({}), text: async () => 'name: x\non: push\njobs: {}\n' };
+  };
+
+  const entries = await searchAndCollect({
+    tokens: ['tok'],
+    workflows: ['prepare'],
+    fetchImpl,
+    log: { warn: (/** @type {string} */ m) => warnings.push(m) },
+  });
+
+  assert.equal(lastPage, '2', 'second page requested');
+  assert.equal(entries.length, 130, 'every page of results collected');
+  assert.equal(warnings.length, 0);
+});
+
+test('incomplete_results marks the search failed so a partial inventory is refused', async () => {
+  let failures = 0;
+  const warnings = [];
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ total_count: 3, incomplete_results: true, items: [] }),
+  });
+
+  const entries = await searchAndCollect({
+    tokens: ['tok'],
+    workflows: ['prepare'],
+    fetchImpl,
+    log: { warn: (/** @type {string} */ m) => warnings.push(m) },
+    onSearchFailure: () => {
+      failures += 1;
+    },
+  });
+
+  assert.equal(failures, 1);
+  assert.equal(entries.length, 0);
+  assert.ok(warnings.some((w) => w.includes('incomplete')));
+});
+
+test('a total_count above the 1000-result cap marks the search failed', async () => {
+  let failures = 0;
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ total_count: 1200, incomplete_results: false, items: [] }),
+  });
+
+  const entries = await searchAndCollect({
+    tokens: ['tok'],
+    workflows: ['prepare'],
+    fetchImpl,
+    log: silentLog,
+    onSearchFailure: () => {
+      failures += 1;
+    },
+  });
+
+  assert.equal(failures, 1);
+  assert.equal(entries.length, 0);
+});
+
 test('parseCallSites extracts our call sites with with: input names and ignores others', () => {
   assert.deepEqual(parseCallSites(CONSUMER_CI_YAML, '.github/workflows/ci.yml'), [
     { workflow: 'prepare', inputs: ['php-version', 'base-branch'], outputs: ['branch-name'] },

@@ -146,16 +146,17 @@ export function renderInventoryYaml(entries, updated) {
 
 /**
  * Code-search every token for call sites of each workflow, then fetch and
- * parse each unique hit. Search failures are logged and skipped (callers get
- * every other query's results via `onSearchFailure`), and content fetches try
- * each token in turn before giving up.
+ * parse each unique hit. Search failures and incomplete result sets (the
+ * `incomplete_results` flag or totals beyond GitHub's 1,000-result cap) are
+ * logged and reported via `onSearchFailure`, and content fetches try each
+ * token in turn before giving up.
  *
  * @param {object} options
  * @param {string[]} options.tokens
  * @param {string[]} options.workflows workflow names without extension
  * @param {typeof fetch} [options.fetchImpl]
  * @param {{ warn: (msg: string) => void }} [options.log]
- * @param {() => void} [options.onSearchFailure] called once per failed search request
+ * @param {() => void} [options.onSearchFailure] called once per failed or incomplete search request
  * @returns {Promise<Entry[]>}
  */
 export async function searchAndCollect({ tokens, workflows, fetchImpl = fetch, log = console, onSearchFailure }) {
@@ -170,24 +171,39 @@ export async function searchAndCollect({ tokens, workflows, fetchImpl = fetch, l
 
   for (const token of tokens) {
     for (const name of workflows) {
-      const url = new URL(`${API}/search/code`);
-      url.searchParams.set('q', `"projek-xyz/actions/.github/workflows/${name}.yml" in:file`);
-      url.searchParams.set('per_page', '100');
+      // Page through the results (100 per page; GitHub serves at most 1,000
+      // per query). An incomplete result set must fail the refresh like a
+      // failed request, or the inventory silently loses consumers past the cut.
+      for (let page = 1; page <= 10; page += 1) {
+        const url = new URL(`${API}/search/code`);
+        url.searchParams.set('q', `"projek-xyz/actions/.github/workflows/${name}.yml" in:file`);
+        url.searchParams.set('per_page', '100');
+        url.searchParams.set('page', String(page));
 
-      const res = await fetchImpl(url.toString(), { headers: headers(token, 'application/vnd.github+json') });
-      if (!res.ok) {
-        log.warn(`code search failed for ${name}: HTTP ${res.status} — skipped`);
-        onSearchFailure?.();
-        continue;
-      }
-      const data = /** @type {{ items?: { repository?: { full_name?: string }, path?: string }[] }} */ (
-        await res.json()
-      );
-      for (const item of data.items ?? []) {
-        const repo = item.repository?.full_name;
-        const path = item.path;
-        if (!repo || !path || !WORKFLOW_PATH_RE.test(path)) continue;
-        hits.set(`${repo}|${path}`, { repo, path, manual: false, calls: [] });
+        const res = await fetchImpl(url.toString(), { headers: headers(token, 'application/vnd.github+json') });
+        if (!res.ok) {
+          log.warn(`code search failed for ${name}: HTTP ${res.status} — skipped`);
+          onSearchFailure?.();
+          break;
+        }
+        const data =
+          /** @type {{ total_count?: number, incomplete_results?: boolean, items?: { repository?: { full_name?: string }, path?: string }[] }} */ (
+            await res.json()
+          );
+        if (data.incomplete_results === true || (typeof data.total_count === 'number' && data.total_count > 1000)) {
+          log.warn(`code search returned incomplete results for ${name} — skipped`);
+          onSearchFailure?.();
+          break;
+        }
+        for (const item of data.items ?? []) {
+          const repo = item.repository?.full_name;
+          const path = item.path;
+          if (!repo || !path || !WORKFLOW_PATH_RE.test(path)) continue;
+          hits.set(`${repo}|${path}`, { repo, path, manual: false, calls: [] });
+        }
+        const items = data.items ?? [];
+        if (items.length < 100) break;
+        if (typeof data.total_count === 'number' && page * 100 >= data.total_count) break;
       }
     }
   }
