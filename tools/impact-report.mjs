@@ -2,21 +2,26 @@
 // surface and who is affected, into impact.md (consumed by _ci.yml's impact job
 // for a sticky PR comment) and the Actions job summary.
 //
-// Trigger rule (phase 1): a changed reusable workflow gets a section when
-// baseline → PR removes a `workflow_call` input or output — that is what
-// consumers can still be passing or reading. Consumed surface comes from
-// consumers.yml, refreshed by the impact job from GitHub code search (or
-// consumers-manual.yml for repos search cannot see); a missing or empty
-// inventory renders the report with an incompleteness warning instead of
-// failing. The baseline is fetched from `contracts/<workflow>.json` at the
-// merge base of the PR — before that file exists on the default branch every
-// workflow reports as "baseline introduced". Non-removal breaking rows (type
-// or default change, required false→true) are deferred to the Contracts job
-// (phase 2). Non-reusable workflow files (e.g. `_ci.yml`) never appear.
+// Rule (owner's coherence): CAUTION ⟺ the Contracts job is red. A changed
+// reusable workflow gets a section when baseline → PR carries at least one
+// hard (consumer-observable) contract change — removed input/output/secret,
+// retype, required tightening, added-required input/secret — with consumers
+// filtered per change (removals and retypes hit passers — a file passing at
+// any call site counts; tightenings hit calls that omit the input — any
+// omitted call impacts its file; secrets hit every consumer). Soft changes
+// (default changes,
+// optional additions, relaxations) are silent: they only need a baseline
+// regeneration. The contract baseline comes from contracts/<workflow>.json
+// at the merge base of the PR — a PR that hand-updates the contract still
+// gets its CAUTION. Consumers come from consumers.yml, refreshed by the
+// impact job from GitHub code search (or consumers-manual.yml); a missing
+// or empty inventory renders the report with an incompleteness warning
+// instead of failing. Non-reusable workflow files (e.g. `_ci.yml`) never
+// appear.
 
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { extractCurrentContracts, diffContracts } from './check-contracts.mjs';
+import { extractCurrentContracts, diffContracts, isBreakingChange } from './check-contracts.mjs';
 import { readPrevEntries } from './inventory.mjs';
 
 const WORKFLOW_PATH_RE = /^\.github\/workflows\/[^/]+\.ya?ml$/;
@@ -51,22 +56,49 @@ export function changedWorkflowFiles(diffText) {
  *
  * @typedef {object} Section
  * @property {string} file changed workflow file ('build.yml')
- * @property {'impacted'|'clean'} status CAUTION (consumers use removed items) vs NOTE
+ * @property {'impacted'|'clean'} status CAUTION (consumers in the blast radius) vs NOTE
  * @property {number} consumerCount total recorded consumer files of this workflow
  * @property {Array<{repo: string, files: FileUsage[]}>} impacted grouped by repo, sorted
  *
  * @typedef {object} ImpactModel
- * @property {Section[]} sections per changed workflow with removals
- * @property {string[]} noImpact changed, base present, nothing breaking removed
- * @property {string[]} nonRemovalBreaking breaking rows that are not removals (see Contracts job)
+ * @property {Section[]} sections per changed workflow with hard changes
+ * @property {string[]} noImpact changed, base present, contract identical
  * @property {string[]} introduced changed, no baseline to compare against
  * @property {boolean} inventoryEmpty the consumer inventory is missing or empty
  * @property {boolean} noChanges no changed reusable workflow at all
  */
 
 /**
+ * Hard change → does this consumer file sit in the blast radius?
+ * (Soft kinds never reach here; secrets are untracked, so all consumers.)
+ *
+ * Passers (removed/retyped) use the file-wide union: any call site passing
+ * means the file breaks. Tightenings validate per call site in GitHub, so
+ * they use the per-call sets: any call omitting the input means the file
+ * breaks — a union here would hide a mixed-call file.
+ *
+ * @param {import('./check-contracts.mjs').ContractChange} change
+ * @param {{repo: string, path: string, passes: Set<string>, reads: Set<string>, inputSets: Set<string>[]}} file
+ * @returns {boolean}
+ */
+function hitsChange(change, file) {
+  if (change.kind === 'secret') return true;
+  switch (change.change) {
+    case 'removed':
+      return change.kind === 'input' ? file.passes.has(change.name) : file.reads.has(change.name);
+    case 'retyped':
+      return file.passes.has(change.name);
+    case 'tightened':
+    case 'added-required':
+      return file.inputSets.some((inputs) => !inputs.has(change.name));
+    default:
+      return false;
+  }
+}
+
+/**
  * Analyze changed workflow files against baseline and current contracts,
- * filtering recorded consumers to those using the removed interface.
+ * filtering recorded consumers to those in the blast radius of a hard change.
  *
  * @param {object} options
  * @param {string[]} options.changedFiles workflow file paths from the diff
@@ -80,7 +112,6 @@ export function analyzeChanges({ changedFiles, baseContracts, currentContracts, 
   const model = {
     sections: [],
     noImpact: [],
-    nonRemovalBreaking: [],
     introduced: [],
     inventoryEmpty: inventory.length === 0,
     noChanges: false,
@@ -100,20 +131,23 @@ export function analyzeChanges({ changedFiles, baseContracts, currentContracts, 
       continue;
     }
 
-    // Union each consumer file's surface for this workflow across its calls.
-    /** @type {Array<{repo: string, path: string, passes: Set<string>, reads: Set<string>}>} */
+    // Union each consumer file's surface for this workflow across its calls
+    // (passes/reads feed display and passer matching); inputSets keeps the
+    // per-call input sets for tightening matching.
+    /** @type {Array<{repo: string, path: string, passes: Set<string>, reads: Set<string>, inputSets: Set<string>[]}>} */
     const consumerFiles = [];
     for (const entry of inventory) {
       const calls = entry.calls.filter((c) => c.workflow === name);
       if (calls.length === 0) continue;
       let rec = consumerFiles.find((f) => f.repo === entry.repo && f.path === entry.path);
       if (!rec) {
-        rec = { repo: entry.repo, path: entry.path, passes: new Set(), reads: new Set() };
+        rec = { repo: entry.repo, path: entry.path, passes: new Set(), reads: new Set(), inputSets: [] };
         consumerFiles.push(rec);
       }
       for (const call of calls) {
         for (const input of call.inputs) rec.passes.add(input);
         for (const output of call.outputs ?? []) rec.reads.add(output);
+        rec.inputSets.push(new Set(call.inputs));
       }
     }
 
@@ -124,35 +158,21 @@ export function analyzeChanges({ changedFiles, baseContracts, currentContracts, 
     }
 
     const { changes } = diffContracts(base, current);
-    /** @type {string[]} */
-    const removedInputs = [];
-    /** @type {string[]} */
-    const removedOutputs = [];
-    let otherBreaking = false;
-    for (const change of changes) {
-      if (change.change === 'removed' && change.kind === 'input') removedInputs.push(change.name);
-      else if (change.change === 'removed' && change.kind === 'output') removedOutputs.push(change.name);
-      else if (change.change === 'changed') otherBreaking = true;
-    }
-
-    if (removedInputs.length === 0 && removedOutputs.length === 0) {
-      if (otherBreaking) model.nonRemovalBreaking.push(shortPath);
-      else model.noImpact.push(shortPath);
+    const hard = changes.filter(isBreakingChange);
+    if (hard.length === 0) {
+      // Soft-only (default/optional/relaxation) → silent by design; an
+      // untouched contract → the "no interface impact" line.
+      if (changes.length === 0) model.noImpact.push(shortPath);
       continue;
     }
 
-    const overlapping = consumerFiles.filter(
-      (f) =>
-        [...f.passes].some((i) => removedInputs.includes(i)) ||
-        [...f.reads].some((o) => removedOutputs.includes(o)),
-    );
-    model.sections.push(buildSection(shortPath, overlapping, consumerFiles));
+    const impacted = consumerFiles.filter((f) => hard.some((c) => hitsChange(c, f)));
+    model.sections.push(buildSection(shortPath, impacted, consumerFiles));
   }
 
   model.noChanges =
     model.sections.length === 0 &&
     model.noImpact.length === 0 &&
-    model.nonRemovalBreaking.length === 0 &&
     model.introduced.length === 0;
   return model;
 }
@@ -189,7 +209,7 @@ function buildSection(file, files, allFiles) {
  * @returns {string}
  */
 export function renderImpactReport(model) {
-  if (model.noChanges) return 'No reusable workflow changes in this PR — no consumer impact to report.\n';
+  if (model.noChanges) return 'No breaking contract changes in this PR — no consumer impact to report.\n';
 
   /** @type {string[]} */
   const lines = [];
@@ -220,15 +240,12 @@ export function renderImpactReport(model) {
         }
       }
     } else {
-      lines.push('> [!NOTE]', '> Interface changed, but no recorded consumer uses the removed items.');
+      lines.push('> [!NOTE]', '> Interface changed, but no recorded consumer is affected.');
     }
     lines.push('');
   }
 
   const list = (names) => names.map((n) => `\`${n}\``).join(', ');
-  if (model.nonRemovalBreaking.length > 0) {
-    lines.push(`Changed with non-removal interface changes (see the Contracts job): ${list(model.nonRemovalBreaking)}`);
-  }
   if (model.noImpact.length > 0) lines.push(`Changed with no interface impact: ${list(model.noImpact)}`);
   if (model.introduced.length > 0) {
     lines.push(`Baseline introduced in this PR (nothing to compare): ${list(model.introduced)}`);
