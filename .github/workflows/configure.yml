@@ -1,8 +1,11 @@
 name: Configure
 
+# DEPRECATED: kept as a thin facade over `prepare.yml` so existing callers keep
+# working. New callers must use `prepare` directly. The workflow_call surface
+# below must stay byte-identical (contracts/configure.json) until consumers
+# migrate — see tools/check-contracts.mjs for what counts as breaking.
+
 on:
-  pull_request:
-    branches: [main]
   workflow_call:
     inputs:
       php-version:
@@ -22,7 +25,7 @@ on:
     outputs:
       # Composer
       composer-cache-dir:
-        value: ${{ jobs.environments.outputs.composer-cache-dir }}
+        value: ${{ jobs.prepare.outputs.composer-cache-dir }}
       composer-cache-key:
         value: ${{ jobs.environments.outputs.composer-cache-key }}
       # Docer Built
@@ -30,7 +33,7 @@ on:
         value: ${{ jobs.environments.outputs.image-tag }}
       # Deployment
       should-deploy:
-        value: ${{ jobs.environments.outputs.should-deploy }}
+        value: ${{ jobs.prepare.outputs.should-deploy }}
       target-env:
         value: ${{ jobs.environments.outputs.target-env }}
       # Repository
@@ -40,69 +43,44 @@ on:
         value: ${{ jobs.environments.outputs.target-branch }}
       # Test Reports
       should-reports:
-        value: ${{ jobs.environments.outputs.should-reports }}
+        value: ${{ jobs.prepare.outputs.should-reports }}
       has-codeclimate:
         value: '0'
         description: 'Deprecated'
       has-coveralls:
-        value: ${{ jobs.environments.outputs.has-coveralls }}
+        value: ${{ jobs.prepare.outputs.has-coveralls }}
 
 jobs:
-  labels:
-    name: Labels
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check configs
-        id: check
-        run: |
-          if [ -f ".github/labeler.yml" ] || [ -f ".github/labeler.yaml" ]; then
-            echo "should-label=1" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Labeler
-        if: steps.check.outputs.should-label == '1'
-        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
-        with:
-          dot: true
-
+  # Supplies the outputs `prepare` does not produce and keeps the values this
+  # workflow always returned (image tag, repository/branch naming, deploy
+  # target, composer cache key). Pure shell — no PHP/Composer setup needed.
+  # Its first step is also the deprecation notice: merged in here (instead of
+  # a dedicated job) so the facade costs one runner job less.
   environments:
     name: Environments
     runs-on: ubuntu-latest
     outputs:
-      # Composer
-      composer-cache-dir: ${{ steps.composer.outputs.composer-cache-dir }}
       composer-cache-key: ${{ steps.composer.outputs.composer-cache-key }}
-      # Deployment
-      should-deploy: ${{ steps.deploy.outputs.should-deploy }}
-      target-env: ${{ steps.deploy.outputs.target-env }}
-      # Docker Built
       image-tag: ${{ steps.environment.outputs.image-tag }}
-      # Repository
       repository-name: ${{ steps.repo.outputs.lower-name }}
       target-branch: ${{ steps.repo.outputs.branch-name }}
-      # Test Reports
-      should-reports: ${{ steps.environment.outputs.should-reports }}
-      has-coveralls: ${{ steps.reports.outputs.has-coveralls }}
+      target-env: ${{ steps.deploy.outputs.target-env }}
 
     steps:
+      - name: Deprecation notice
+        run: |
+          # shellcheck disable=SC2016 # literal backticks render markdown code spans in the summary
+          {
+            echo '::warning::`configure` is deprecated — call the `prepare` workflow instead.'
+            echo '## ⚠️ `configure` is deprecated'
+            echo ''
+            echo 'This workflow now delegates to `prepare`. Point your job at `projek-xyz/actions/.github/workflows/prepare.yml` instead of `projek-xyz/actions/.github/workflows/configure.yml`.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Reports
-        id: reports
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        run: |
-          if [ -n "${COVERALLS_REPO_TOKEN}" ]; then echo "has-coveralls=1" >> "$GITHUB_OUTPUT"; fi
+        with:
+          persist-credentials: false
 
       - name: Repository
         id: repo
@@ -123,20 +101,9 @@ jobs:
         env:
           APP_VERSION: ${{ steps.repo.outputs.app-version }}
           BRANCH_NAME: ${{ steps.repo.outputs.branch-name }}
-          COVERALLS: ${{ steps.reports.outputs.has-coveralls }}
-          PHP_VERSION: ${{ inputs.php-version }}
         run: |
-          # shellcheck disable=SC2153 # APP_VERSION comes from step env (YAML), not a shell assignment
           # Generate image tag with timestamp and commit
           echo "image-tag=${APP_VERSION}-${BRANCH_NAME}.${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
-
-          if [ "$COVERALLS" == '1' ]; then
-            echo "should-reports=1" >> "$GITHUB_OUTPUT";
-          fi
-
-          if [ -n "${PHP_VERSION}" ]; then
-            echo "has-php=1" >> "$GITHUB_OUTPUT";
-          fi
 
       - name: Deploy
         id: deploy
@@ -145,41 +112,41 @@ jobs:
           TARGET_ENV: ${{ inputs.target-env }}
         run: |
           # Set deployment environment
-          DEPLOYABLE=0
-
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "target-env=${TARGET_ENV}" >> "$GITHUB_OUTPUT"
-            DEPLOYABLE=1
           elif [[ "$BRANCH_NAME" == "main" ]]; then
             echo "target-env=develop" >> "$GITHUB_OUTPUT"
           else
             echo "target-env=staging" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "should-deploy=$DEPLOYABLE" >> "$GITHUB_OUTPUT"
-
-      - name: Setup PHP
-        if: steps.environment.outputs.has-php == '1'
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
-        with:
-          php-version: ${{ inputs.php-version }}
-          coverage: none
-
-      - name: Composer Caches
-        if: steps.environment.outputs.has-php == '1'
+      - name: Composer Cache Key
         id: composer
         env:
           LARAVEL_VERSION: ${{ inputs.laravel-version }}
           COMPOSER_CACHE_KEY: php-${{ inputs.php-version }}
         run: |
-          if ! [ -f ./composer.json ]; then
-            ls -lah; echo "::error::\`composer.json\` file not found."
-            exit 1
+          # The cache directory comes from `prepare`; the key is a pure string.
+          # Non-composer projects keep the empty value they never reached before
+          # (the old job failed instead) — deprecation must not add failures.
+          if [ -f ./composer.json ]; then
+            if [ -n "${LARAVEL_VERSION}" ]; then
+              COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"
+            fi
+            echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> "$GITHUB_OUTPUT"
           fi
 
-          if [ -n "${LARAVEL_VERSION}" ]; then
-            COMPOSER_CACHE_KEY="${COMPOSER_CACHE_KEY}-l${LARAVEL_VERSION}"
-          fi
-
-          echo "composer-cache-dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-          echo "composer-cache-key=${COMPOSER_CACHE_KEY}" >> "$GITHUB_OUTPUT"
+  # Delegates detection/reporting outputs to `prepare`. Its identical `labels`
+  # job also replaces this workflow's own (removed) labels job: whenever the
+  # caller's event is `pull_request`, labeling runs through this call.
+  prepare:
+    name: Prepare
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/prepare.yml
+    with:
+      php-version: ${{ inputs.php-version }}
+      target-env: ${{ inputs.target-env }}
+    secrets:
+      COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
