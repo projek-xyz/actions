@@ -4,36 +4,33 @@ on:
   workflow_call:
     inputs:
       base-branch:
-        required: false
-        type: string
         default: ${{ github.event.repository.default_branch || 'main' }}
+        type: string
       project-ref:
+        default: ''
         description: >-
           Check out this ref for file-based detection only; branch, PR, and
           version outputs still describe the caller.
-        required: false
         type: string
-        default: ''
       commit-message:
         required: false
         type: string
       php-version:
-        required: false
+        default: ${{ vars.PHP_VERSION || '8.2' }}
         type: string
-        default: ${{ vars.PHP_VERSION || '8.1' }}
       node-version:
-        required: false
-        type: string
         default: ${{ vars.NODE_VERSION || 'lts/*' }}
+        type: string
       pnpm-version:
-        required: false
-        type: string
+        description: '[Deprecated] this input is no longer in use'
         default: ${{ vars.PNPM_VERSION || '10.12.4' }}
-      bun-version:
-        required: false
         type: string
+      bun-version:
+        description: '[Deprecated] this input is no longer in use'
         default: ${{ vars.BUN_VERSION || '1.3.10' }}
+        type: string
       target-env:
+        description: '[Deprecated] this input is no longer in use'
         required: false
         type: string
     outputs:

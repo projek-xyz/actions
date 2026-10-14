@@ -4,30 +4,29 @@ on:
   workflow_call:
     inputs:
       files:
+        default: ''
         description: Multiline list of files or wildcards to upload
-        required: false
         type: string
-        default: ''
-      artifact_name:
-        description: Name of the artifact to download
-        required: false
-        type: string
+      artifact-name:
         default: 'release-archives'
-      branch_name:
-        description: Name of the branch to download artifacts from
-        required: false
+        description: Name of the artifact to download
         type: string
+      branch-name:
         default: 'main'
-      workflow_name:
-        description: Name of the workflow to download artifacts from
-        required: false
+        description: Name of the branch to download artifacts from
         type: string
-        default: ''
-      check_attempts:
-        description: Number of times to check for release availability
-        required: false
-        type: number
+      check-attempts:
         default: 10
+        description: Number of times to check for release availability
+        type: number
+      workflow-name:
+        default: ''
+        description: Name of the workflow to download artifacts from
+        type: string
+      workflow_name:
+        default: ''
+        description: '[Deprecated] please use "workflow-name" instead'
+        type: string
 
 jobs:
   uploads:
@@ -37,6 +36,9 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      WORKFLOW_NAME: ${{ inputs.workflow-name || inputs.workflow_name }}
+
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,7 +47,7 @@ jobs:
       id: release-version
       shell: bash
       env:
-        ATTEMPTS: ${{ inputs.check_attempts }}
+        ATTEMPTS: ${{ inputs.check-attempts }}
         GITHUB_TOKEN: ${{ github.token }}
         LATEST_COMMIT: ${{ github.event.head_commit.message }}
       run: |
@@ -81,12 +83,12 @@ jobs:
       id: artifact-files
       if: |-
         steps.release-version.outputs.result != '' &&
-        (inputs.files == '' && inputs.workflow_name != '')
+        (inputs.files == '' && env.WORKFLOW_NAME != '')
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        BRANCH_NAME: ${{ inputs.branch_name }}
-        ARTIFACT_NAME: ${{ inputs.artifact_name }}
-        WORKFLOW_NAME: ${{ inputs.workflow_name }}
+        BRANCH_NAME: ${{ inputs.branch-name }}
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        WORKFLOW_NAME: ${{ env.WORKFLOW_NAME }}
       with:
         result-encoding: string
         script: |

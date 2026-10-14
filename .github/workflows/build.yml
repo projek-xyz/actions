@@ -1,4 +1,4 @@
-name: Release
+name: Build
 
 on:
   workflow_call:
@@ -15,11 +15,12 @@ on:
       composer-cache-dir:
         required: true
         type: string
-      php-version:
-        default: '8.2'
-        type: string
       composer-cache-key:
-        default: php-${{ inputs.php-version }}
+        description: '[Deprecated] this input is no longer in use'
+        default: php-${{ vars.PHP_VERSION || '8.2' }}
+        type: string
+      php-version:
+        default: ${{ vars.PHP_VERSION || '8.2' }}
         type: string
       node-pm-name:
         required: true

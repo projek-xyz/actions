@@ -23,7 +23,7 @@
       "name": "composer-cache-key",
       "type": "string",
       "required": false,
-      "default": "php-${{ inputs.php-version }}"
+      "default": "php-${{ vars.PHP_VERSION || '8.2' }}"
     },
     {
       "name": "node-pm-name",
@@ -41,7 +41,7 @@
       "name": "php-version",
       "type": "string",
       "required": false,
-      "default": "8.2"
+      "default": "${{ vars.PHP_VERSION || '8.2' }}"
     },
     {
       "name": "sentry-project",
