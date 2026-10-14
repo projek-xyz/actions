@@ -13,22 +13,26 @@ import { extractCallContract, listWorkflowFiles } from './extract-contracts.mjs'
  * @typedef {object} ContractChange
  * @property {'input'|'output'|'secret'} kind
  * @property {string} name
- * @property {'removed'|'added'|'changed'|'relaxed'} change
+ * @property {'removed'|'added'|'added-required'|'retyped'|'tightened'|'default-changed'|'relaxed'} change
  */
 
 /**
  * @typedef {object} ContractDiff
- * @property {string[]} breaking entries that would break consumers
- * @property {string[]} additions entries requiring a baseline regeneration
+ * @property {string[]} breaking hard rows: consumer-observable breaks; never pass `--update`
+ * @property {string[]} additions soft rows: stale baseline; regenerate with `--update`
  * @property {ContractChange[]} changes structured view, same order as the messages
  */
 
 /**
- * Diff two contracts. Rules:
- * - removed entry → breaking; new entry → addition
- * - input type/default change or required false→true → breaking
- * - input required true→false → addition ("relaxed"); same for secrets
+ * Diff two contracts. Hard (breaking) vs soft (additions) rules:
+ * - removed entry (any kind) → hard
+ * - input `type` change → hard (retyped); `required` false→true → hard (tightened)
+ * - input/secret added with `required: true` → hard (added-required)
+ * - default value changed/introduced/removed → soft (default-changed)
+ * - `required` true→false → soft (relaxed); optional entries added → soft (addition)
  * - output descriptions are cosmetic and ignored
+ *
+ * Message strings are frozen; only bucket membership carries the class.
  *
  * @param {Contract} baseline
  * @param {Contract} current
@@ -45,7 +49,7 @@ export function diffContracts(baseline, current) {
   /**
    * @param {'input'|'output'|'secret'} kind
    * @param {{name: string}[]} baseList
-   * @param {{name: string}[]} currList
+   * @param {{name: string, required?: boolean}[]} currList
    * @param {(b: any, c: any) => void} [check]
    */
   const compare = (kind, baseList, currList, check) => {
@@ -62,8 +66,12 @@ export function diffContracts(baseline, current) {
       check?.(entry, other);
     }
 
-    for (const name of curr.keys()) {
-      if (!base.has(name)) {
+    for (const [name, entry] of curr) {
+      if (base.has(name)) continue;
+      if (entry.required === true) {
+        breaking.push(`${kind} added: ${name}`);
+        changes.push({ kind, name, change: 'added-required' });
+      } else {
         additions.push(`${kind} added: ${name}`);
         changes.push({ kind, name, change: 'added' });
       }
@@ -71,9 +79,15 @@ export function diffContracts(baseline, current) {
   };
 
   compare('input', baseline.inputs, current.inputs, (b, c) => {
-    if (b.type !== c.type || JSON.stringify(b.default) !== JSON.stringify(c.default) || (b.required === false && c.required === true)) {
+    if (b.type !== c.type) {
       breaking.push(`input changed: ${b.name}`);
-      changes.push({ kind: 'input', name: b.name, change: 'changed' });
+      changes.push({ kind: 'input', name: b.name, change: 'retyped' });
+    } else if (b.required === false && c.required === true) {
+      breaking.push(`input changed: ${b.name}`);
+      changes.push({ kind: 'input', name: b.name, change: 'tightened' });
+    } else if (JSON.stringify(b.default) !== JSON.stringify(c.default)) {
+      additions.push(`input changed: ${b.name}`);
+      changes.push({ kind: 'input', name: b.name, change: 'default-changed' });
     } else if (b.required === true && c.required === false) {
       additions.push(`input relaxed: ${b.name}`);
       changes.push({ kind: 'input', name: b.name, change: 'relaxed' });
@@ -85,7 +99,7 @@ export function diffContracts(baseline, current) {
   compare('secret', baseline.secrets, current.secrets, (b, c) => {
     if (b.required === false && c.required === true) {
       breaking.push(`secret changed: ${b.name}`);
-      changes.push({ kind: 'secret', name: b.name, change: 'changed' });
+      changes.push({ kind: 'secret', name: b.name, change: 'tightened' });
     } else if (b.required === true && c.required === false) {
       additions.push(`secret relaxed: ${b.name}`);
       changes.push({ kind: 'secret', name: b.name, change: 'relaxed' });
@@ -93,6 +107,21 @@ export function diffContracts(baseline, current) {
   });
 
   return { breaking, additions, changes };
+}
+
+/**
+ * Hard-class membership: a change consumers can observe (removal, retype,
+ * required tightening, added-required). Soft kinds (default-changed, relaxed,
+ * added) flow through `--update` instead.
+ *
+ * @param {ContractChange} change
+ * @returns {boolean}
+ */
+export function isBreakingChange(change) {
+  return change.change === 'removed'
+    || change.change === 'retyped'
+    || change.change === 'tightened'
+    || change.change === 'added-required';
 }
 
 /**
