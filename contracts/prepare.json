@@ -29,7 +29,7 @@
       "name": "php-version",
       "type": "string",
       "required": false,
-      "default": "${{ vars.PHP_VERSION || '8.1' }}"
+      "default": "${{ vars.PHP_VERSION || '8.2' }}"
     },
     {
       "name": "pnpm-version",

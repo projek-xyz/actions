@@ -2,19 +2,19 @@
   "workflow": "uploads",
   "inputs": [
     {
-      "name": "artifact_name",
+      "name": "artifact-name",
       "type": "string",
       "required": false,
       "default": "release-archives"
     },
     {
-      "name": "branch_name",
+      "name": "branch-name",
       "type": "string",
       "required": false,
       "default": "main"
     },
     {
-      "name": "check_attempts",
+      "name": "check-attempts",
       "type": "number",
       "required": false,
       "default": 10
@@ -27,6 +27,12 @@
     },
     {
       "name": "workflow_name",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "workflow-name",
       "type": "string",
       "required": false,
       "default": ""
