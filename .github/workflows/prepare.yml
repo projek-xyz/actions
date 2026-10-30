@@ -287,13 +287,17 @@ jobs:
 
           # Extract branch slug
           BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's#/#_#g; s#\[##g; s#\]##g')
-          BRANCH_SLUG=${BRANCH_SLUG:0:20}.${GITHUB_SHA:0:8}
+          BRANCH_SLUG=${BRANCH_SLUG:0:20}
 
           COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
           FOR_RELEASE=$([[ $COMMIT_TITLE =~ chore\(release\) ]] && echo "1" || echo "0")
 
-          PR_NUMBER=$([[ $BRANCH_NAME =~ "/merge" ]] && echo "${BRANCH_NAME//\/merge/}" || echo "")
-          APP_VERSION=$BRANCH_SLUG
+          PR_NUMBER=
+          if [[ $GITHUB_REF =~ refs/pull/([0-9]+)/merge ]]; then
+            PR_NUMBER=${BASH_REMATCH[1]}
+          fi
+
+          APP_VERSION=${BRANCH_SLUG}.${GITHUB_SHA:0:8}
 
           PKG_VERSION=
           if [[ $HAS_NODE -eq 1 ]]; then PKG_VERSION=$(jq -r '.version // ""' package.json); fi
