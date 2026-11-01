@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { previousRun } from '../.github/scripts/previous-run.js';
+import { previousRun } from '../.github/scripts/previous-run.mjs';
 
 const CONTEXT = { repo: { owner: 'projek-xyz', repo: 'actions' }, workflow: 'CI' };
 const SHA = 'a'.repeat(40);

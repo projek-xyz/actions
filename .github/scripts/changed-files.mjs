@@ -48,7 +48,7 @@ const phpPatterns = [
 /**
  * @param {import('@actions/github-script').AsyncFunctionArguments} p2
  */
-export function changedFiles({ context, core, exec, github, glob }) {
+export function changedFiles({ context, core, exec, glob }) {
   /** @type {string[]} */
   const files = [];
 
@@ -125,18 +125,15 @@ export function changedFiles({ context, core, exec, github, glob }) {
     current = current.slice(0, 8)
     previous = previous.slice(0, 8)
 
-    const notices = [
-      `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m.`
-    ]
-
     /** @type {Assesment} */
     const assesment = context.eventName === 'workflow_dispatch'
       ? { build: true, deploy: true, tests: true, report: 'Runs from `workflow_dispatch`' }
       : (await getAssesment(files, opt))
 
-    notices.push(`Assesment: ${assesment.report}`)
-
-    core.notice(notices.join('\n'));
+    core.notice(
+      `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m.`,
+      { title: `Assesment: ${assesment.report}` }
+    );
 
     for (const diff of files) {
       core.info(`- \u001b[34m${diff}\u001b[0m`)

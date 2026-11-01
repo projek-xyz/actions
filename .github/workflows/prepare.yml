@@ -383,7 +383,7 @@ jobs:
           TARGET_BRANCH: ${{ steps.project.outputs.base-branch }}
         with:
           script: |
-            const { previousRun } = await import('${{github.workspace}}/.github/scripts/previous-run.js');
+            const { previousRun } = await import('${{github.workspace}}/.github/scripts/previous-run.mjs');
 
             return await previousRun({ context, core, exec, github })([
               process.env.CURRENT_BRANCH,
@@ -405,7 +405,7 @@ jobs:
           NODE_PM_NAME: ${{ steps.node.outputs.pm-name }}
         with:
           script: |
-            const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.js');
+            const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.mjs');
 
             return await changedFiles({ context, core, exec, glob })(
               process.env.CURRENT_SHA,

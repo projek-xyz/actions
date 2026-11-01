@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 // fresh module instance via cache-busting dynamic import.
 let importCounter = 0;
 async function loadChangedFiles() {
-  const mod = await import(`../.github/scripts/changed-files.js?fresh=${++importCounter}`);
+  const mod = await import(`../.github/scripts/changed-files.mjs?fresh=${++importCounter}`);
   return mod.changedFiles;
 }
 
