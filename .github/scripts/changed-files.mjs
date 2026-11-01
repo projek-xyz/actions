@@ -93,7 +93,7 @@ export function changedFiles({ context, core, exec, glob }) {
     const titles = [];
 
     for (const [key, val] of Object.entries(assesment)) {
-      if (key === 'report') continue;
+      if (['report', 'title'].includes(key)) continue;
       const color = val ? '35' : '36'
       reports.push(`\u001b[1m${key}\u001b[0m: \u001b[${color}m${val}\u001b[0m`);
       titles.push(`\`${key}\`: \`${val}\``)
