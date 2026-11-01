@@ -13,6 +13,7 @@
  * @property {boolean} deploy
  * @property {boolean} tests
  * @property {string} report
+ * @property {string} title
  */
 
 /**
@@ -58,7 +59,8 @@ export function changedFiles({ context, core, exec, glob }) {
    * @returns {Promise<Assesment>}
    */
   async function getAssesment(files, { isPhp, isNode, nodePM }) {
-    const assesment = { build: false, deploy: false, tests: false, report: '' };
+    /** @type {Assesment} */
+    const assesment = { build: false, deploy: false, tests: false, report: '', title: '' };
     const matches = [];
 
     /** @type {string[]} */
@@ -88,13 +90,16 @@ export function changedFiles({ context, core, exec, glob }) {
     }
 
     const reports = [];
+    const titles = [];
 
     for (const [key, val] of Object.entries(assesment)) {
       if (key === 'report') continue;
       const color = val ? '35' : '36'
       reports.push(`\u001b[1m${key}\u001b[0m: \u001b[${color}m${val}\u001b[0m`);
+      titles.push(`\`${key}\`: \`${val}\``)
     }
 
+    assesment.title = titles.join(', ')
     assesment.report = reports.join(', ')
     core.debug(JSON.stringify({ files, matches }))
 
@@ -127,12 +132,12 @@ export function changedFiles({ context, core, exec, glob }) {
 
     /** @type {Assesment} */
     const assesment = context.eventName === 'workflow_dispatch'
-      ? { build: true, deploy: true, tests: true, report: 'Runs from `workflow_dispatch`' }
+      ? { build: true, deploy: true, tests: true, report: 'Runs from `workflow_dispatch`', title: '' }
       : (await getAssesment(files, opt))
 
     core.notice(
       `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m.`,
-      { title: `Assesment: ${assesment.report}` }
+      { title: `Assesment: ${assesment.title}` }
     );
 
     for (const diff of files) {
