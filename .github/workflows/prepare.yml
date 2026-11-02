@@ -294,7 +294,7 @@ jobs:
           BRANCH_SLUG=${BRANCH_SLUG:0:20}
 
           COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
-          FOR_RELEASE=$([[ $COMMIT_TITLE =~ ^chore\(release\) ]] && echo "1" || echo "0")
+          FOR_RELEASE=$([[ $COMMIT_TITLE =~ ^chore\(release\):[[:space:]] ]] && echo "1" || echo "0")
 
           PR_NUMBER=
           if [[ $GITHUB_REF =~ refs/pull/([0-9]+)/merge ]]; then
