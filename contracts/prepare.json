@@ -17,7 +17,7 @@
       "name": "commit-message",
       "type": "string",
       "required": false,
-      "default": null
+      "default": "${{ github.event.head_commit.message }}"
     },
     {
       "name": "node-version",
@@ -142,6 +142,10 @@
     {
       "name": "should-deploy",
       "description": "Whether should run the deployment."
+    },
+    {
+      "name": "should-release",
+      "description": "Whether this commit indicates a release push."
     },
     {
       "name": "should-reports",

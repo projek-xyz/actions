@@ -13,7 +13,7 @@ on:
           version outputs still describe the caller.
         type: string
       commit-message:
-        required: false
+        default: ${{ github.event.head_commit.message }}
         type: string
       php-version:
         default: ${{ vars.PHP_VERSION || '8.2' }}
@@ -53,6 +53,9 @@ on:
       pr-number:
         value: ${{ jobs.environments.outputs.pr-number }}
         description: The PR number, if any.
+      should-release:
+        value: ${{ jobs.environments.outputs.should-release }}
+        description: Whether this commit indicates a release push.
       # PHP Project
       needs-php:
         value: ${{ jobs.environments.outputs.needs-php }}
@@ -163,6 +166,7 @@ jobs:
       branch-name: ${{ steps.project.outputs.branch-name }}
       branch-slug: ${{ steps.project.outputs.branch-slug }}
       pr-number: ${{ steps.project.outputs.pr-number }}
+      should-release: ${{ steps.project.outputs.should-release }}
       # PHP Project
       needs-php: ${{ steps.php.outputs.needs-php || '0' }}
       needs-composer: ${{ steps.php.outputs.needs-composer || '0' }}
@@ -290,7 +294,7 @@ jobs:
           BRANCH_SLUG=${BRANCH_SLUG:0:20}
 
           COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
-          FOR_RELEASE=$([[ $COMMIT_TITLE =~ chore\(release\) ]] && echo "1" || echo "0")
+          FOR_RELEASE=$([[ $COMMIT_TITLE =~ ^chore\(release\):[[:space:]] ]] && echo "1" || echo "0")
 
           PR_NUMBER=
           if [[ $GITHUB_REF =~ refs/pull/([0-9]+)/merge ]]; then
@@ -312,7 +316,7 @@ jobs:
           fi
 
           if [[ $FOR_RELEASE -eq 1 ]]; then
-            APP_VERSION=${COMMIT#chore\(release\): }
+            APP_VERSION=${COMMIT_TITLE#chore\(release\): }
           fi
 
           if [[ $GITHUB_REF =~ "refs/tags/" ]]; then
@@ -327,6 +331,7 @@ jobs:
             echo "pr-number=$PR_NUMBER"
             echo "base-branch=$BASE_BRANCH"
             echo "commit-title=$COMMIT_TITLE"
+            echo "should-release=$FOR_RELEASE"
           } >> "$GITHUB_OUTPUT"
 
           # Prepare for `previous-run` and `changed-files` step
