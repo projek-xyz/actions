@@ -145,7 +145,7 @@
     },
     {
       "name": "should-release",
-      "description": "Whether this commit indicating a release push."
+      "description": "Whether this commit indicates a release push."
     },
     {
       "name": "should-reports",

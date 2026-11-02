@@ -55,7 +55,7 @@ on:
         description: The PR number, if any.
       should-release:
         value: ${{ jobs.environments.outputs.should-release }}
-        description: Whether this commit indicating a release push.
+        description: Whether this commit indicates a release push.
       # PHP Project
       needs-php:
         value: ${{ jobs.environments.outputs.needs-php }}
@@ -294,7 +294,7 @@ jobs:
           BRANCH_SLUG=${BRANCH_SLUG:0:20}
 
           COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
-          FOR_RELEASE=$([[ $COMMIT_TITLE =~ chore\(release\) ]] && echo "1" || echo "0")
+          FOR_RELEASE=$([[ $COMMIT_TITLE =~ ^chore\(release\) ]] && echo "1" || echo "0")
 
           PR_NUMBER=
           if [[ $GITHUB_REF =~ refs/pull/([0-9]+)/merge ]]; then
@@ -316,7 +316,7 @@ jobs:
           fi
 
           if [[ $FOR_RELEASE -eq 1 ]]; then
-            APP_VERSION=${COMMIT#chore\(release\): }
+            APP_VERSION=${COMMIT_TITLE#chore\(release\): }
           fi
 
           if [[ $GITHUB_REF =~ "refs/tags/" ]]; then
