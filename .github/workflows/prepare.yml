@@ -53,6 +53,9 @@ on:
       pr-number:
         value: ${{ jobs.environments.outputs.pr-number }}
         description: The PR number, if any.
+      should-release:
+        value: ${{ jobs.environments.outputs.should-release }}
+        description: Whether this commit indicating a release push.
       # PHP Project
       needs-php:
         value: ${{ jobs.environments.outputs.needs-php }}
@@ -163,6 +166,7 @@ jobs:
       branch-name: ${{ steps.project.outputs.branch-name }}
       branch-slug: ${{ steps.project.outputs.branch-slug }}
       pr-number: ${{ steps.project.outputs.pr-number }}
+      should-release: ${{ steps.project.outputs.should-release }}
       # PHP Project
       needs-php: ${{ steps.php.outputs.needs-php || '0' }}
       needs-composer: ${{ steps.php.outputs.needs-composer || '0' }}
@@ -327,6 +331,7 @@ jobs:
             echo "pr-number=$PR_NUMBER"
             echo "base-branch=$BASE_BRANCH"
             echo "commit-title=$COMMIT_TITLE"
+            echo "should-release=$FOR_RELEASE"
           } >> "$GITHUB_OUTPUT"
 
           # Prepare for `previous-run` and `changed-files` step
