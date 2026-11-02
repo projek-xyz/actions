@@ -144,6 +144,10 @@
       "description": "Whether should run the deployment."
     },
     {
+      "name": "should-release",
+      "description": "Whether this commit indicating a release push."
+    },
+    {
       "name": "should-reports",
       "description": "Whether test coverage reports should be generated."
     },
