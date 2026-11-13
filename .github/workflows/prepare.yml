@@ -127,9 +127,12 @@ on:
         required: false
 
 jobs:
+  # Labels are cosmetic and fork PRs get a read-only token, so the labeler step
+  # 403s there; `continue-on-error` keeps that from failing the caller pipeline.
   labels:
     name: Labels
     if: github.event_name == 'pull_request'
+    continue-on-error: true
     runs-on: ubuntu-latest
 
     permissions:
