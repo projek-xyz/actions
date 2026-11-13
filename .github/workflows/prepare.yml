@@ -150,8 +150,11 @@ jobs:
             echo "should-label=1" >> "$GITHUB_OUTPUT"
           fi
 
+      # Fork PRs get a read-only token, so this always 403s there; labels are
+      # cosmetic and must never fail the caller's pipeline.
       - name: Labeler
         if: steps.check.outputs.should-label == '1'
+        continue-on-error: true
         uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
         with:
           dot: true

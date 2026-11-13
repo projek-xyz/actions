@@ -13,7 +13,7 @@ const ci = load(readFileSync('.github/workflows/_ci.yml', 'utf8'));
 test('smoke-assert runs when a smoke leg fails and gates on leg results first', () => {
   const job = ci.jobs['smoke-assert'];
 
-  assert.deepEqual(job.needs, ['smoke-node', 'smoke-php', 'smoke-bun']);
+  assert.deepEqual(job.needs, ['smoke-node', 'smoke-php', 'smoke-bun', 'smoke-readonly']);
   assert.ok(
     typeof job.if === 'string' && job.if.includes('!cancelled'),
     `smoke-assert must run on failure (got if: ${JSON.stringify(job.if)})`,
@@ -35,6 +35,10 @@ test('smoke call jobs declare permissions instead of inheriting repo defaults', 
       `${name} permissions`,
     );
   }
+
+  // Fork PRs only ever get read: this leg must stay read-only, or it stops
+  // reproducing the token that broke labeling in consumers.
+  assert.equal(ci.jobs['smoke-readonly'].permissions, 'read-all');
 });
 
 test('impact job refreshes the inventory per run with step-scoped, failure-tolerant auth', () => {
