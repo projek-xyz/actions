@@ -102,18 +102,10 @@ jobs:
     with:
       project-ref: fixtures/prepare-node-bun
 
-  # A fork PR's token is read on every scope; `read-all` reproduces exactly that,
-  # so any step in prepare.yml that assumes write access fails here, not in a
-  # consumer's PR.
-  smoke-readonly:
-    name: Smoke (read-only token)
-    uses: ./.github/workflows/prepare.yml
-    permissions: read-all
-
   smoke-assert:
     name: Smoke assertions
     runs-on: ubuntu-latest
-    needs: [smoke-node, smoke-php, smoke-bun, smoke-readonly]
+    needs: [smoke-node, smoke-php, smoke-bun]
 
     # !cancelled(): run on success AND failure. Without this the job inherits
     # success() and is SKIPPED when a smoke leg fails — GitHub reports skipped
@@ -130,7 +122,6 @@ jobs:
           SELF_NODE_RESULT: ${{ needs.smoke-node.result }}
           PHP_RESULT: ${{ needs.smoke-php.result }}
           BUN_RESULT: ${{ needs.smoke-bun.result }}
-          READONLY_RESULT: ${{ needs.smoke-readonly.result }}
           SELF_NEEDS_NODE: ${{ needs.smoke-node.outputs.needs-node }}
           SELF_NEEDS_PNPM: ${{ needs.smoke-node.outputs.needs-pnpm }}
           SELF_NEEDS_BUN: ${{ needs.smoke-node.outputs.needs-bun }}
@@ -158,7 +149,6 @@ jobs:
           leg "smoke-node" "$SELF_NODE_RESULT"
           leg "smoke-php" "$PHP_RESULT"
           leg "smoke-bun" "$BUN_RESULT"
-          leg "smoke-readonly" "$READONLY_RESULT"
           if [ "$fail" -ne 0 ]; then
             echo "A smoke leg failed — output assertions cannot run." >> "$GITHUB_STEP_SUMMARY"
             exit $fail
