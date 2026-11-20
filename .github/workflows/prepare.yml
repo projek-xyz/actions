@@ -9,11 +9,12 @@ on:
       project-ref:
         default: ''
         description: >-
-          Check out this ref for file-based detection only; branch, PR, and
-          version outputs still describe the caller.
+          Check out this ref for file-based detection only. Branch, PR, and
+          version outputs describe the caller, or its upstream run when the
+          caller is a `workflow_run`.
         type: string
       commit-message:
-        default: ${{ github.event.head_commit.message }}
+        default: ${{ github.event.head_commit.message || github.event.workflow_run.head_commit.message }}
         type: string
       php-version:
         default: ${{ vars.PHP_VERSION || '8.2' }}
@@ -285,12 +286,17 @@ jobs:
           COMMIT_MESSAGE: ${{ inputs.commit-message }}
           HAS_NODE: ${{ steps.node.outputs.needs-node }}
           BASE_BRANCH: ${{ inputs.base-branch }}
+          UPSTREAM_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha }}
+          UPSTREAM_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+          UPSTREAM_BASE: ${{ github.event.workflow_run.pull_requests[0].base.ref }}
         run: |
           # Extract repository name and convert to lowercase
           REPO_NAME=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
 
-          # Extract repository branch name
-          BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
+          # A `workflow_run` caller runs on the default branch, so its own ref and
+          # sha describe `main`; the upstream run describes what was processed.
+          BRANCH_NAME=${UPSTREAM_BRANCH:-${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}}
 
           # Extract branch slug
           BRANCH_SLUG=$(echo "$BRANCH_NAME" | sed 's#/#_#g; s#\[##g; s#\]##g')
@@ -299,12 +305,13 @@ jobs:
           COMMIT_TITLE=$(echo "$COMMIT_MESSAGE" | head -n 1)
           FOR_RELEASE=$([[ $COMMIT_TITLE =~ ^chore\(release\):[[:space:]] ]] && echo "1" || echo "0")
 
-          PR_NUMBER=
-          if [[ $GITHUB_REF =~ refs/pull/([0-9]+)/merge ]]; then
+          PR_NUMBER=${UPSTREAM_PR:-}
+          if [[ -z $PR_NUMBER && $GITHUB_REF =~ refs/pull/([0-9]+)/merge ]]; then
             PR_NUMBER=${BASH_REMATCH[1]}
           fi
 
-          APP_VERSION=${BRANCH_SLUG}.${GITHUB_SHA:0:8}
+          SHA=${UPSTREAM_SHA:-$GITHUB_SHA}
+          APP_VERSION=${BRANCH_SLUG}.${SHA:0:8}
 
           PKG_VERSION=
           if [[ $HAS_NODE -eq 1 ]]; then PKG_VERSION=$(jq -r '.version // ""' package.json); fi
@@ -314,7 +321,7 @@ jobs:
           fi
 
           if [[ -n $PR_NUMBER ]]; then
-            BASE_BRANCH=$GITHUB_BASE_REF
+            BASE_BRANCH=${GITHUB_BASE_REF:-${UPSTREAM_BASE:-$BASE_BRANCH}}
             APP_VERSION="pr${PR_NUMBER}-${APP_VERSION}"
           fi
 
@@ -407,7 +414,7 @@ jobs:
         continue-on-error: true
         env:
           PREVIOUS_SHA: ${{ fromJSON(steps.previous-run.outputs.result).sha }}
-          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           NEEDS_PHP: ${{ steps.php.outputs.needs-php }}
           NEEDS_NODE: ${{ steps.node.outputs.needs-node }}
           NODE_PM_NAME: ${{ steps.node.outputs.pm-name }}
@@ -415,6 +422,8 @@ jobs:
           script: |
             const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.mjs');
 
+            // The scripts are checked out from `main`, so an older revision may still
+            // need `glob`; the current one ignores it.
             return await changedFiles({ context, core, exec, glob })(
               process.env.CURRENT_SHA,
               process.env.PREVIOUS_SHA,

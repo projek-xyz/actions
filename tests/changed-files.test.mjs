@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { load } from 'js-yaml';
 
 // The script mutates a module-level `jsPatterns` array, so each test loads a
 // fresh module instance via cache-busting dynamic import.
@@ -23,41 +25,36 @@ function makeCore() {
   };
 }
 
-function makeExec(diffText) {
+function makeExec(diffText, exitCode = 0) {
   return {
     exec: async (cmd, args, opts) => {
-      opts.listeners.stdout(Buffer.from(diffText));
-      return 0;
-    },
-  };
-}
-
-function makeGlob(files) {
-  const calls = [];
-  return {
-    calls,
-    glob: {
-      create: async (patterns) => {
-        calls.push(patterns);
-        return {
-          async *globGenerator() {
-            for (const f of files) yield f;
-          },
-        };
-      },
+      if (exitCode === 0) {
+        opts.listeners.stdout(Buffer.from(diffText));
+      } else {
+        opts.listeners.stderr(Buffer.from('fatal: bad object'));
+      }
+      return exitCode;
     },
   };
 }
 
 const ctx = (eventName) => ({ eventName });
 
+// Consumers run this workflow from a pinned ref but the scripts are checked out
+// from `main`, so both revisions meet; an older script still requires `glob`.
+test('workflow passes `glob` for scripts checked out from `main`', () => {
+  const prepare = load(readFileSync('.github/workflows/prepare.yml', 'utf8'));
+  const step = prepare.jobs.environments.steps.find((s) => s.id === 'changed-files');
+
+  assert.match(step.with.script, /changedFiles\(\{[^}]*\bglob\b[^}]*\}\)/);
+});
+
 test('workflow_dispatch forces build, deploy and tests', async () => {
   const changedFiles = await loadChangedFiles();
   const { outputs, core } = makeCore();
   const exec = makeExec('');
-  const { glob } = makeGlob([]);
 
-  await changedFiles({ context: ctx('workflow_dispatch'), core, exec, glob })(
+  await changedFiles({ context: ctx('workflow_dispatch'), core, exec })(
     'aaaaaaaabbbbbbbbb',
     'ccccccccdddddddd',
     { isPhp: false, isNode: false, nodePM: 'npm' },
@@ -72,9 +69,8 @@ test('node tsx change triggers build and tests but not deploy', async () => {
   const changedFiles = await loadChangedFiles();
   const { outputs, core } = makeCore();
   const exec = makeExec('src/App.tsx');
-  const { glob } = makeGlob(['/workspace/src/App.tsx']);
 
-  await changedFiles({ context: ctx('push'), core, exec, glob })(
+  await changedFiles({ context: ctx('push'), core, exec })(
     'aaaaaaaabbbbbbbbb',
     'ccccccccdddddddd',
     { isPhp: false, isNode: true, nodePM: 'npm' },
@@ -85,13 +81,29 @@ test('node tsx change triggers build and tests but not deploy', async () => {
   assert.equal(outputs['should-deploy'], '0');
 });
 
-test('php composer.json change triggers build and tests', async () => {
+// A `workflow_run` caller has the default branch checked out, so the diff can
+// name a file that does not exist on disk; the path alone must decide.
+test('added file absent from the checkout still triggers build and tests', async () => {
   const changedFiles = await loadChangedFiles();
   const { outputs, core } = makeCore();
-  const exec = makeExec('composer.json');
-  const { glob } = makeGlob(['/workspace/composer.json']);
+  const exec = makeExec('src/new.js');
 
-  await changedFiles({ context: ctx('push'), core, exec, glob })(
+  await changedFiles({ context: ctx('workflow_run'), core, exec })(
+    'aaaaaaaabbbbbbbbb',
+    'ccccccccdddddddd',
+    { isPhp: false, isNode: true, nodePM: 'npm' },
+  );
+
+  assert.equal(outputs['should-build'], '1');
+  assert.equal(outputs['should-tests'], '1');
+});
+
+test('deleted php file triggers build and tests', async () => {
+  const changedFiles = await loadChangedFiles();
+  const { outputs, core } = makeCore();
+  const exec = makeExec('app/Models/Gone.php');
+
+  await changedFiles({ context: ctx('workflow_run'), core, exec })(
     'aaaaaaaabbbbbbbbb',
     'ccccccccdddddddd',
     { isPhp: true, isNode: false, nodePM: 'npm' },
@@ -101,55 +113,43 @@ test('php composer.json change triggers build and tests', async () => {
   assert.equal(outputs['should-tests'], '1');
 });
 
-test('package-manager lockfile patterns: only the active pm globs its lockfile', async () => {
-  const cases = [
-    { nodePM: 'npm', includes: ['package-lock.json'], excludes: ['bun.lock'] },
-    { nodePM: 'pnpm', includes: ['pnpm-*.{yaml,yml}'], excludes: ['bun.lock'] },
-    { nodePM: 'bun', includes: ['bun.lock'], excludes: [] },
-  ];
+test('php composer.json change triggers build and tests', async () => {
+  const changedFiles = await loadChangedFiles();
+  const { outputs, core } = makeCore();
+  const exec = makeExec('composer.json');
 
-  for (const { nodePM, includes, excludes } of cases) {
-    const changedFiles = await loadChangedFiles();
-    const { core } = makeCore();
-    const exec = makeExec('');
-    const { calls, glob } = makeGlob([]);
+  await changedFiles({ context: ctx('push'), core, exec })(
+    'aaaaaaaabbbbbbbbb',
+    'ccccccccdddddddd',
+    { isPhp: true, isNode: false, nodePM: 'npm' },
+  );
 
-    await changedFiles({ context: ctx('push'), core, exec, glob })(
-      'aaaaaaaabbbbbbbbb',
-      'ccccccccdddddddd',
-      { isPhp: false, isNode: true, nodePM },
-    );
-
-    const patterns = calls[0];
-    for (const needle of includes) {
-      assert.ok(patterns.includes(needle), `expected patterns for ${nodePM} to include ${needle}`);
-    }
-    for (const needle of excludes) {
-      assert.ok(!patterns.includes(needle), `expected patterns for ${nodePM} to exclude ${needle}`);
-    }
-  }
+  assert.equal(outputs['should-build'], '1');
+  assert.equal(outputs['should-tests'], '1');
 });
 
-test('bun.lock change builds only when the active pm is bun', async () => {
+test('lockfile changes build only for the active package manager', async () => {
   const cases = [
-    { nodePM: 'pnpm', yielded: [], expected: '0' },
-    { nodePM: 'npm', yielded: [], expected: '0' },
-    { nodePM: 'bun', yielded: ['/workspace/bun.lock'], expected: '1' },
+    { file: 'package-lock.json', nodePM: 'npm', expected: '1' },
+    { file: 'package-lock.json', nodePM: 'pnpm', expected: '0' },
+    { file: 'pnpm-lock.yaml', nodePM: 'pnpm', expected: '1' },
+    { file: 'pnpm-lock.yaml', nodePM: 'npm', expected: '0' },
+    { file: 'bun.lock', nodePM: 'bun', expected: '1' },
+    { file: 'bun.lock', nodePM: 'npm', expected: '0' },
   ];
 
-  for (const { nodePM, yielded, expected } of cases) {
+  for (const { file, nodePM, expected } of cases) {
     const changedFiles = await loadChangedFiles();
     const { outputs, core } = makeCore();
-    const exec = makeExec('bun.lock');
-    const { glob } = makeGlob(yielded);
+    const exec = makeExec(file);
 
-    await changedFiles({ context: ctx('push'), core, exec, glob })(
+    await changedFiles({ context: ctx('push'), core, exec })(
       'aaaaaaaabbbbbbbbb',
       'ccccccccdddddddd',
       { isPhp: false, isNode: true, nodePM },
     );
 
-    assert.equal(outputs['should-build'], expected, `nodePM=${nodePM}`);
+    assert.equal(outputs['should-build'], expected, `${file} with nodePM=${nodePM}`);
   }
 });
 
@@ -157,9 +157,8 @@ test('no changed files reports available=0 and no build', async () => {
   const changedFiles = await loadChangedFiles();
   const { outputs, core } = makeCore();
   const exec = makeExec('');
-  const { glob } = makeGlob([]);
 
-  await changedFiles({ context: ctx('push'), core, exec, glob })(
+  await changedFiles({ context: ctx('push'), core, exec })(
     'aaaaaaaabbbbbbbbb',
     'ccccccccdddddddd',
     { isPhp: true, isNode: true, nodePM: 'npm' },
@@ -167,4 +166,24 @@ test('no changed files reports available=0 and no build', async () => {
 
   assert.equal(outputs['available'], '0');
   assert.equal(outputs['should-build'], '0');
+  assert.equal(outputs['should-tests'], '0');
+});
+
+// The upstream commit can be missing from the clone (fork PR head); the diff
+// then fails, which must not read as "nothing to build".
+test('failed diff falls back to build and tests', async () => {
+  const changedFiles = await loadChangedFiles();
+  const { outputs, core } = makeCore();
+  const exec = makeExec('', 128);
+
+  await changedFiles({ context: ctx('workflow_run'), core, exec })(
+    'aaaaaaaabbbbbbbbb',
+    'ccccccccdddddddd',
+    { isPhp: true, isNode: true, nodePM: 'npm' },
+  );
+
+  assert.equal(outputs['available'], '0');
+  assert.equal(outputs['should-build'], '1');
+  assert.equal(outputs['should-tests'], '1');
+  assert.equal(outputs['should-deploy'], '0');
 });
