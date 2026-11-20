@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { load } from 'js-yaml';
 
 // The script mutates a module-level `jsPatterns` array, so each test loads a
 // fresh module instance via cache-busting dynamic import.
@@ -37,6 +39,15 @@ function makeExec(diffText, exitCode = 0) {
 }
 
 const ctx = (eventName) => ({ eventName });
+
+// Consumers run this workflow from a pinned ref but the scripts are checked out
+// from `main`, so both revisions meet; an older script still requires `glob`.
+test('workflow passes `glob` for scripts checked out from `main`', () => {
+  const prepare = load(readFileSync('.github/workflows/prepare.yml', 'utf8'));
+  const step = prepare.jobs.environments.steps.find((s) => s.id === 'changed-files');
+
+  assert.match(step.with.script, /changedFiles\(\{[^}]*\bglob\b[^}]*\}\)/);
+});
 
 test('workflow_dispatch forces build, deploy and tests', async () => {
   const changedFiles = await loadChangedFiles();

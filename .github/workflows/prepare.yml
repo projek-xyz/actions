@@ -422,7 +422,9 @@ jobs:
           script: |
             const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.mjs');
 
-            return await changedFiles({ context, core, exec })(
+            // The scripts are checked out from `main`, so an older revision may still
+            // need `glob`; the current one ignores it.
+            return await changedFiles({ context, core, exec, glob })(
               process.env.CURRENT_SHA,
               process.env.PREVIOUS_SHA,
               {
