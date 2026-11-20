@@ -422,7 +422,7 @@ jobs:
           script: |
             const { changedFiles } = await import('${{github.workspace}}/.github/scripts/changed-files.mjs');
 
-            return await changedFiles({ context, core, exec, glob })(
+            return await changedFiles({ context, core, exec })(
               process.env.CURRENT_SHA,
               process.env.PREVIOUS_SHA,
               {

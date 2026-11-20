@@ -1,5 +1,7 @@
 // @ts-check
 
+import { matchesGlob } from 'node:path';
+
 /**
  * @typedef {object} AssesmentOpt
  * @property {boolean} isPhp
@@ -49,19 +51,16 @@ const phpPatterns = [
 /**
  * @param {import('@actions/github-script').AsyncFunctionArguments} p2
  */
-export function changedFiles({ context, core, exec, glob }) {
+export function changedFiles({ context, core, exec }) {
   /** @type {string[]} */
   const files = [];
 
   /**
    * @param {string[]} files
    * @param {AssesmentOpt} p0
-   * @returns {Promise<Assesment>}
+   * @returns {Assesment}
    */
-  async function getAssesment(files, { isPhp, isNode, nodePM }) {
-    /** @type {Assesment} */
-    const assesment = { build: false, deploy: false, tests: false, report: '', title: '' };
-    const matches = [];
+  function getAssesment(files, { isPhp, isNode, nodePM }) {
 
     /** @type {string[]} */
     const patterns = [
@@ -78,16 +77,18 @@ export function changedFiles({ context, core, exec, glob }) {
       patterns.push(...jsPatterns)
     }
 
-    const globber = await glob.create(patterns.join('\n'))
+    // Match the diff paths, not the workspace contents: a `workflow_run` caller
+    // checks out the default branch, not the commit the diff describes.
+    const matches = files.filter(file => patterns.some(pattern => matchesGlob(file, pattern)))
 
-    for await (const file of globber.globGenerator()) {
-      matches.push(file)
-      if (files.find(path => file.endsWith(path))) {
-        assesment.build = true;
-        assesment.tests = true;
-        break;
-      }
-    }
+    /** @type {Assesment} */
+    const assesment = {
+      build: matches.length > 0,
+      deploy: false,
+      tests: matches.length > 0,
+      report: '',
+      title: '',
+    };
 
     const reports = [];
     const titles = [];
@@ -112,7 +113,7 @@ export function changedFiles({ context, core, exec, glob }) {
    * @param {AssesmentOpt} opt
    */
   return async function main(current, previous, opt) {
-    await exec.exec('git', ['diff', '--name-only', current, previous], {
+    const exitCode = await exec.exec('git', ['diff', '--name-only', current, previous], {
       ignoreReturnCode: true,
       silent: true,
       listeners: {
@@ -130,13 +131,20 @@ export function changedFiles({ context, core, exec, glob }) {
     current = current.slice(0, 8)
     previous = previous.slice(0, 8)
 
+    // An unknown diff is not an empty diff: build and test rather than skip both.
+    const diffed = exitCode === 0;
+
     /** @type {Assesment} */
     const assesment = context.eventName === 'workflow_dispatch'
       ? { build: true, deploy: true, tests: true, report: 'Runs from `workflow_dispatch`', title: '' }
-      : (await getAssesment(files, opt))
+      : diffed
+        ? getAssesment(files, opt)
+        : { build: true, deploy: false, tests: true, report: `Could not diff \`${previous}\`..\`${current}\``, title: '' };
 
     core.notice(
-      `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m.`,
+      diffed
+        ? `Found \u001b[33m${files.length}\u001b[0m files changed from \u001b[33m${previous}\u001b[0m to \u001b[33m${current}\u001b[0m.`
+        : `Could not diff \u001b[33m${previous}\u001b[0m..\u001b[33m${current}\u001b[0m; assuming build and tests are needed.`,
       { title: `Assesment: ${assesment.title}` }
     );
 
